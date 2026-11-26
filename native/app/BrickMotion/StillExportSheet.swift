@@ -12,14 +12,21 @@ import UniformTypeIdentifiers
     case standard, large
     var id: Self { self }
     func pixels(_ layout: Layout) -> (Int, Int) {
-      let (width, height) = layout.dimensions
-      return self == .standard ? (width, height) : (width * 2, height * 2)
+      let size = bmapp.stillSize(layout.engine, self == .large)
+      return (Int(size.width), Int(size.height))
     }
   }
 
   enum Quality: Int, CaseIterable, Identifiable {
     case draft = 32, standard = 128, final = 512
     var id: Self { self }
+    var engine: bmapp.StillQuality {
+      switch self {
+      case .draft: .Draft
+      case .standard: .Standard
+      case .final: .Final
+      }
+    }
     var title: String {
       switch self {
       case .draft: "Draft"
@@ -32,7 +39,7 @@ import UniformTypeIdentifiers
   enum Camera: Hashable { case viewport, automatic }
 
   let title: String
-  let angles: [String]
+  let angles: bmapp.ViewAngles
   let snapshot: () -> Data
   let library: String
   let presentSavePanel: (NSSavePanel, @escaping (NSApplication.ModalResponse) -> Void) -> Void
@@ -46,45 +53,30 @@ import UniformTypeIdentifiers
   @State private var error: String?
 
   /// The project's look as the path tracer takes it: the scene's backdrop and the light rig.
-  private var lookArguments: [String] = []
+  private let look: bmapp.RenderLook
 
-  init(title: String, angles: [String], look: [String] = [], snapshot: @escaping () -> Data, library: String,
+  init(title: String, angles: bmapp.ViewAngles, look: bmapp.RenderLook = bmapp.RenderLook(), snapshot: @escaping () -> Data, library: String,
        presentSavePanel: @escaping (NSSavePanel, @escaping (NSApplication.ModalResponse) -> Void) -> Void,
        close: @escaping () -> Void) {
     self.title = title
     self.angles = angles
-    self.lookArguments = look
+    self.look = look
     self.snapshot = snapshot
     self.library = library
     self.presentSavePanel = presentSavePanel
     self.close = close
-    _camera = State(initialValue: angles.isEmpty ? .automatic : .viewport)
+    _camera = State(initialValue: angles.present ? .viewport : .automatic)
     _showLogo = State(initialValue: VideoLogo.shared.stamp != nil)
-  }
-
-  /// bmexport's path tracer draws its own floor and no edge lines; the scene's backdrop and
-  /// whether the lights turn with the camera carry over.
-  static func lookArguments(_ look: bmapp.RenderLook) -> [String] {
-    var arguments = [look.lightsFollowCamera ? "--lights-follow" : "--lights-fixed"]
-    if let scene = bmapp.Session.scenes().first(where: { String($0.id) == String(look.scene) }) {
-      let byte = { (value: Double) in String(Int((value * 255).rounded())) }
-      arguments += ["--background", [scene.background.x, scene.background.y, scene.background.z].map(byte).joined(separator: ",")]
-    }
-    return arguments
   }
 
   static func show(_ context: CommandContext) {
     guard let document = context.document, let window = context.window, window.attachedSheet == nil else { return }
-    var angles: [String] = []
-    if let pose = context.viewport?.viewport.camera() {
-      let degrees = 180 / Double.pi
-      angles = ["--azimuth", String(pose.yaw * degrees), "--elevation", String(pose.pitch * degrees),
-                "--fov", String(pose.verticalFOV * degrees)]
-    }
+    var angles = bmapp.ViewAngles()
+    if let pose = context.viewport?.viewport.camera() { angles = bmapp.viewAngles(pose) }
     let sheet = NSWindow()
     let view = StillExportSheet(
       title: (document.displayName as NSString).deletingPathExtension, angles: angles,
-      look: Self.lookArguments(document.session.renderLook()),
+      look: document.session.renderLook(),
       snapshot: { Data(String(document.session.projectBytes()).utf8) },
       library: String(bmapp.Session.ldrawDirectory()),
       presentSavePanel: { [weak sheet] panel, completion in
@@ -145,7 +137,7 @@ import UniformTypeIdentifiers
           GridRow {
             Text("Camera").accessibilityHidden(true)
             Picker("Camera", selection: $camera) {
-              Text("Viewport Angle").tag(Camera.viewport).disabled(angles.isEmpty)
+              Text("Viewport Angle").tag(Camera.viewport).disabled(!angles.present)
               Text("Automatic Framing").tag(Camera.automatic)
             }
             .labelsHidden().fixedSize()
@@ -202,11 +194,16 @@ import UniformTypeIdentifiers
   }
 
   /// The helper's arguments for these settings.
-  var options: [String] {
-    let (width, height) = size.pixels(layout)
-    var arguments = ["--size", "\(width)x\(height)", "--samples", String(quality.rawValue), "--no-denoise"]
-    if camera == .viewport { arguments += angles }
-    return arguments + lookArguments
+  var options: [String] { bmapp.stillArguments(choice, look).map { String($0) } }
+
+  private var choice: bmapp.StillChoice {
+    var choice = bmapp.StillChoice()
+    choice.shape = layout.engine
+    choice.large = size == .large
+    choice.quality = quality.engine
+    choice.viewportAngle = camera == .viewport
+    choice.angles = angles
+    return choice
   }
 
   private func chooseDestination() {
@@ -221,11 +218,10 @@ import UniformTypeIdentifiers
   }
 
   private func submit(to destination: URL) {
-    let (width, height) = size.pixels(layout)
     let stamp: VideoLogo.Stamp? = showLogo ? VideoLogo.shared.stamp : nil
     var finish: (@Sendable (URL) throws -> Void)?
     if let stamp { finish = { url in try stamp.apply(to: url) } }
-    let summary = "Still · \(width) × \(height) · \(quality.title)" + (stamp == nil ? "" : " · Logo")
+    let summary = String(bmapp.stillSummary(choice, stamp != nil))
     do {
         _ = try RenderQueue.shared.enqueue(snapshot(), operation: .still, options: options, library: library,
                                            destination: destination, summary: summary, finish: finish)

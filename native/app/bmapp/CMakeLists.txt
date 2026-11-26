@@ -7,7 +7,7 @@ target_compile_options(bmapp PRIVATE $<$<COMPILE_LANGUAGE:OBJCXX>:-fobjc-arc>)
 target_compile_definitions(bmapp PRIVATE BM_DEFAULT_LDRAW="${CMAKE_SOURCE_DIR}/../public/ldraw"
   BM_DEFAULT_HABITS="${CMAKE_SOURCE_DIR}/../public/data/suggest/habits.json")
 target_link_libraries(bmapp PUBLIC bmcore bmrender bmfilm bmtools_common PRIVATE bm_warnings bmmovie bmsound
-  "-framework Metal" "-framework QuartzCore" "-framework Foundation" "-framework ImageIO" "-framework CoreGraphics")
+  "-framework Metal" "-framework QuartzCore" "-framework Foundation" "-framework ImageIO" "-framework CoreGraphics" "-framework AVFoundation" "-framework CoreMedia")
 
 file(GLOB BMAPP_TESTS CONFIGURE_DEPENDS tests/*_test.cpp tests/*_test.mm)
 add_executable(bmapp_tests ${BMAPP_TESTS})

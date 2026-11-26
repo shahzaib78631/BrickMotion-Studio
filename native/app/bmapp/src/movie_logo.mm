@@ -80,3 +80,17 @@ void composite(bmr::Image& frame, const MovieLogo& logo) {
 }
 
 }  // namespace bmapp
+
+namespace bmapp {
+
+std::string stampLogo(const std::string& png, const std::string& logo, LogoCorner corner) {
+  auto still = bmr::readPng(png);
+  if (still.empty()) return "The rendered still could not be read.";
+  std::string error;
+  const auto mark = loadMovieLogo(logo, still.width, still.height, corner, error);
+  if (!mark) return "The logo could not be read.";
+  composite(still, *mark);
+  return bmr::writePng(still, png) ? "" : "The still could not be written.";
+}
+
+}  // namespace bmapp

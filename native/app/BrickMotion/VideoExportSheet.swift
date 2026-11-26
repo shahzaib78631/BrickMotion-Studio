@@ -17,29 +17,34 @@ struct ModelVideoTarget {
 
     var id: Self { self }
 
-    var dimensions: (Int, Int) {
+    var engine: bmapp.FrameShape {
       switch self {
-      case .landscape: (1920, 1080)
-      case .vertical: (1080, 1920)
-      case .portrait: (1080, 1350)
-      case .square: (1080, 1080)
+      case .landscape: .Landscape
+      case .vertical: .Vertical
+      case .portrait: .Portrait
+      case .square: .Square
       }
     }
 
-    var ratio: String {
-      switch self {
-      case .landscape: "16:9"
-      case .vertical: "9:16"
-      case .portrait: "4:5"
-      case .square: "1:1"
-      }
+    var dimensions: (Int, Int) {
+      let size = bmapp.frameSize(engine)
+      return (Int(size.width), Int(size.height))
     }
+
+    var ratio: String { String(cString: bmapp.frameRatio(engine)) }
   }
 
   enum Source: String, CaseIterable, Identifiable {
     case build, keyframes, turntable
     var id: Self { self }
     var title: String { rawValue.capitalized }
+    var engine: bmapp.MovieSource {
+      switch self {
+      case .build: .Build
+      case .keyframes: .Keyframes
+      case .turntable: .Turntable
+      }
+    }
   }
 
   enum Camera: Hashable {
@@ -53,13 +58,17 @@ struct ModelVideoTarget {
     case small, standard, large
     var id: Self { self }
 
-    func size(for layout: Layout) -> (Int, Int) {
-      let (width, height) = layout.dimensions
+    var engine: bmapp.MovieResolution {
       switch self {
-      case .small: return (width * 2 / 3, height * 2 / 3)
-      case .standard: return (width, height)
-      case .large: return (width * 2, height * 2)
+      case .small: .Small
+      case .standard: .Standard
+      case .large: .Large
       }
+    }
+
+    func size(for layout: Layout) -> (Int, Int) {
+      let size = bmapp.movieSize(layout.engine, engine)
+      return (Int(size.width), Int(size.height))
     }
   }
 
@@ -69,11 +78,11 @@ struct ModelVideoTarget {
     case high = "High"
     var id: Self { self }
 
-    var factor: Double {
+    var engine: bmapp.MovieQuality {
       switch self {
-      case .compact: 0.6
-      case .standard: 1
-      case .high: 1.6
+      case .compact: .Compact
+      case .standard: .Standard
+      case .high: .High
       }
     }
   }
@@ -92,7 +101,7 @@ struct ModelVideoTarget {
   let targets: [ModelVideoTarget]
   var focusedModel: String? { focusPath.last.map(displayName) }
   let standardPreview: Bool
-  let angles: [String]
+  let angles: bmapp.ViewAngles
   let savedCameras: [bmapp.SceneCamera]
   /// The focused model has camera keys on the Build's clock, and on the Keyframes timeline's.
   let hasBuildTrack: Bool
@@ -137,24 +146,17 @@ struct ModelVideoTarget {
   static func show(_ context: CommandContext, targets: [ModelVideoTarget] = []) {
     guard let document = context.document, let window = context.window, window.attachedSheet == nil else { return }
     let sheet = NSWindow()
-    var angles: [String] = []
-    if let pose = context.viewport?.viewport.camera() {
-      let scale = 180 / Double.pi
-      let yaw = String(pose.yaw * scale)
-      let pitch = String(pose.pitch * scale)
-      let fieldOfView = String(pose.verticalFOV * scale)
-      angles = ["--azimuth", yaw, "--elevation", pitch, "--fov", fieldOfView]
-      if pose.orthographic { angles.append("--orthographic") }
-    }
+    var angles = bmapp.ViewAngles()
+    if let pose = context.viewport?.viewport.camera() { angles = bmapp.viewAngles(pose) }
     let scene = document.session.sceneCameras()
     let savedCameras = Array(scene.cameras)
     let defaultCamera = targets.isEmpty && scene.useForVideo ? savedCameras.first { $0.id == scene.activeId } : nil
     let hasTrack = !document.session.cameraKeys(.Build).empty()
     let hasTimelineTrack = !document.session.cameraKeys(.Timeline).empty()
-    let projectCamera: Camera = switch String(document.session.exportCamera()) {
-    case "buildView": angles.isEmpty ? .director : .viewport
-    case "automatic": .director
-    default: (hasTrack || hasTimelineTrack) && targets.isEmpty ? .track : .director
+    let projectCamera: Camera = switch bmapp.defaultMovieCamera(document.session, !targets.isEmpty, angles.present) {
+    case .Viewport: .viewport
+    case .Track: .track
+    default: .director  // a saved default is defaultCamera above
     }
     let view = VideoExportSheet(
       title: (document.displayName as NSString).deletingPathExtension,
@@ -281,7 +283,7 @@ struct ModelVideoTarget {
             if hasCameraTrack {
               Text("Camera Track").tag(Camera.track).disabled(!allowsTrack)
             }
-            Text("Viewport Angle").tag(Camera.viewport).disabled(angles.isEmpty)
+            Text("Viewport Angle").tag(Camera.viewport).disabled(!angles.present)
             if allowsSavedCameras && !savedCameras.isEmpty {
               Divider()
               ForEach(savedCameras, id: \.identifier) { saved in
@@ -525,30 +527,38 @@ struct ModelVideoTarget {
     }
   }
 
-  private var exportSummary: String {
-    let (width, height) = resolution.size(for: layout)
-    let description = "\(source.title) · \(width) × \(height) · \(fps) fps"
-    let detailed = quality == .standard ? description : description + " · " + quality.rawValue
-    return VideoLogo.shared.options.isEmpty ? detailed : detailed + " · Logo"
+  private var exportSummary: String { String(bmapp.movieSummary(choice(for: []))) }
+
+  /// The sheet's settings as bmapp takes them; the camera is resolved against what this video allows.
+  private func choice(for path: [String]) -> bmapp.MovieChoice {
+    var choice = bmapp.MovieChoice()
+    choice.source = source.engine
+    choice.shape = layout.engine
+    choice.resolution = resolution.engine
+    choice.quality = quality.engine
+    choice.fps = Int32(fps)
+    choice.turntableSeconds = Int32(turntableSeconds)
+    choice.snapAudio = includeSnapAudio
+    choice.standardPreview = standardPreview
+    choice.angles = angles
+    switch camera {
+    case .director: choice.camera = .Director
+    case .track: choice.camera = allowsTrack ? .Track : .Director
+    case .viewport: choice.camera = .Viewport
+    case .saved(let id):
+      choice.camera = allowsSavedCameras ? .Saved : .Director
+      choice.sceneCameraId = std.string(id)
+    }
+    for model in path { choice.modelPath.push_back(std.string(model)) }
+    if let stamp = VideoLogo.shared.stamp {
+      choice.logo = std.string(stamp.file.path)
+      choice.logoCorner = stamp.corner.engine
+    }
+    return choice
   }
 
   private func options(for path: [String]) -> [String] {
-    let (width, height) = resolution.size(for: layout)
-    let model = path.flatMap { ["--model", $0] }
-    let heading = camera == .viewport ? angles : []
-    var arguments = ["--size", "\(width)x\(height)", "--fps", String(fps), "--source", source.rawValue]
-    if quality != .standard {
-      let base = max(800_000, width * height * fps / 5)
-      let bitRate = Int(min(240_000_000, Double(base) * quality.factor))
-      arguments += ["--bitrate", String(bitRate)]
-    }
-    if source == .turntable { arguments += ["--duration", String(turntableSeconds)] }
-    if standardPreview { arguments.append("--standard-preview") }
-    if source == .build && !standardPreview && includeSnapAudio { arguments.append("--snap-audio") }
-    if allowsSavedCameras, case .saved(let id) = camera { arguments += ["--scene-camera", id] }
-    if allowsTrack && camera == .track { arguments.append("--camera-track") }
-    arguments += VideoLogo.shared.options
-    return arguments + model + heading
+    bmapp.movieArguments(choice(for: path)).map { String($0) }
   }
 
   private func start(_ destination: URL) {

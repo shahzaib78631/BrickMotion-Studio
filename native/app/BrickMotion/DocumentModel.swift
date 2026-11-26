@@ -252,13 +252,15 @@ enum SidebarTab: String, CaseIterable { case models, steps, parts }
 
   /// A shared definition only needs one video, even if several of its uses are selected.
   func submodelVideoTargets(for ids: Set<String>? = nil) -> [ModelVideoTarget] {
-    var definitions: Set<String> = []
-    return rows.enumerated().compactMap { index, row in
-      let definition = String(row.def)
-      guard !definition.isEmpty, row.pieces > 0, ids?.contains(String(row.id)) != false,
-            definitions.insert(definition).inserted else { return nil }
-      return ModelVideoTarget(title: displayName(String(row.name)), path: path(from: index))
+    let targets: [bmapp.VideoTarget]
+    if let ids {
+      var list = bmapp.StringList()
+      for id in ids { list.push_back(std.string(id)) }
+      targets = Array(bmapp.submodelVideoTargets(document.session, list))
+    } else {
+      targets = Array(bmapp.submodelVideoTargets(document.session))
     }
+    return targets.map { ModelVideoTarget(title: String($0.title), path: $0.path.map { String($0) }) }
   }
 
   /// Edits the row's submodel alone (the root row: the whole model).

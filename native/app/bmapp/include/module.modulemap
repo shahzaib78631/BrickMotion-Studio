@@ -4,6 +4,7 @@ module BMApp {
   header "bmapp/session.h"
   header "bmapp/viewport.h"
   header "bmapp/movie_export.h"
+  header "bmapp/export_options.h"
   header "bmapp/snap_mix.h"
   header "bmapp/doctypes.h"
   header "bmapp/keys.h"

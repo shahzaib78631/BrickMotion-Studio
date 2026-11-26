@@ -1,4 +1,5 @@
 import AppKit
+import BMApp
 import Observation
 
 @MainActor @Observable final class RenderJob: Identifiable {
@@ -106,12 +107,7 @@ import Observation
     let key = Self.key
     var reserved = Set(jobs.lazy.filter { !$0.status.finished }.map { key($0.destination) })
     for movie in movies {
-      let invalid = CharacterSet.controlCharacters.union(CharacterSet(charactersIn: "/:\\"))
-      let safe = movie.name.components(separatedBy: invalid).joined(separator: " ")
-        .trimmingCharacters(in: .whitespacesAndNewlines.union(CharacterSet(charactersIn: ".")))
-      var prefix = String(safe.prefix(60)).trimmingCharacters(in: .whitespaces)
-      while prefix.utf8.count > 200 { prefix.removeLast() }
-      let stem = prefix.isEmpty ? "Submodel" : prefix
+      let stem = String(bmapp.safeFileStem(std.string(movie.name)))
       var destination = folder.appendingPathComponent(stem).appendingPathExtension("mp4")
       var suffix = 2
       while reserved.contains(key(destination)) || files.fileExists(atPath: destination.path) {
