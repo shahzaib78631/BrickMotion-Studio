@@ -155,6 +155,12 @@ pub struct BrickMotionApp {
     pub camera_panel: chrome::camera_panel::CameraPanelState,
     /// The Keys track's objects and picks, Auto Key and Group.
     pub keys: chrome::keys_track::KeysView,
+    /// Flight bakes on the `bm-anim` worker, for the document they were made from.
+    pub bake: crate::workers::Job<crate::flights::DocKey, crate::flights::Baked>,
+    /// Check Motion on the `bm-anim` worker.
+    pub audit: crate::workers::Job<crate::flights::DocKey, bm::motion::MotionReport>,
+    /// The bake note, the rebake confirm, the check result and the flight path.
+    pub flights: crate::flights::Flights,
     pub(crate) camera_synced: Option<(u64, u64)>,
     /// Build timeline zoom, scroll, track disclosure and drag state.
     pub timeline: chrome::timeline::TimelineState,
@@ -240,6 +246,9 @@ impl BrickMotionApp {
             panels: Default::default(),
             camera_panel: Default::default(),
             keys: Default::default(),
+            bake: Default::default(),
+            audit: Default::default(),
+            flights: Default::default(),
             camera_synced: None,
             timeline: chrome::timeline::TimelineState::default(),
             properties_page: chrome::properties::Page::Inspector,
@@ -352,6 +361,9 @@ impl BrickMotionApp {
         self.sound_page.reset();
         self.sound.reset();
         self.camera_panel.reset();
+        self.bake.cancel();
+        self.audit.cancel();
+        self.flights.reset();
         // The old document (and its renderer) goes, off this thread; the widget sets the new one up.
         crate::loader::retire(std::mem::replace(&mut self.doc, doc));
         self.viewport.reset();
@@ -721,6 +733,7 @@ impl BrickMotionApp {
                 self.ribbon_tab = "Keyframes";
                 chrome::keys_panel::insert_key(self);
             }
+            "video.bake_flight" => crate::flights::bake(self, false),
             "video.group" => {
                 self.keys.group_rows = !self.keys.group_rows;
                 self.keys.row_picks.clear();
@@ -927,6 +940,9 @@ impl BrickMotionApp {
         self.sound_page.reset();
         self.sound.reset();
         self.camera_panel.reset();
+        self.bake.cancel();
+        self.audit.cancel();
+        self.flights.reset();
         let mut s = bm::Session::new();
         match s.new_blank() {
             Ok(_) => {
@@ -1182,6 +1198,8 @@ impl eframe::App for BrickMotionApp {
         self.text_focus = ui.ctx().egui_wants_keyboard_input();
         if self.has_document {
             self.keys.sync(self.doc.session());
+            crate::flights::poll(self, ui.ctx());
+            crate::flight_path::delete_key(self, ui.ctx());
             chrome::keys_track::delete_key(self, ui.ctx());
         }
         chrome::camera_panel::escape(self, ui.ctx());
@@ -1199,6 +1217,7 @@ impl eframe::App for BrickMotionApp {
         chrome::swatches::show(ui, self);
         chrome::steps::show_editor(ui, self);
         chrome::replace::show(ui, self);
+        crate::flights::show_confirm(ui, self);
         chrome::confirm::show(ui, self);
         self.run_requested();
         self.poll_placement(ui.ctx());

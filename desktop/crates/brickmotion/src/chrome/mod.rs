@@ -50,7 +50,9 @@ pub fn central(ui: &mut Ui, app: &mut BrickMotionApp) {
                 key_submodel: app.keys.target().filter(|id| id.1).map(|id| id.0),
             }
         });
+        app.viewport.block_primary = crate::flight_path::handle_pointer(ui, app);
         app.viewport.show(ui, &mut app.doc, &mut app.edit, &t, app.prefs.auto_plan, playing, planning);
+        crate::flight_path::show(ui, app);
         // The ribbon floats over the top of the view; the other panels start below it.
         ribbon::show(ui, app, rect);
         let below = egui::Rect::from_min_max(egui::pos2(rect.left(), rect.top() + ribbon::SPACE), rect.max);

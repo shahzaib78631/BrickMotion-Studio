@@ -5,7 +5,7 @@
 use bm::keys::{Interpolation, KeyChannel, KeyObject, KeyScene, Keyframe};
 use egui::{Align2, FontId, Rect, RichText, Sense, Ui, WidgetInfo, pos2, vec2};
 
-use super::float_panel::{self, Head, PanelKind, group_heading};
+use super::float_panel::{self, Head, PanelKind, group_heading, link, link_row, links};
 use super::keys_track::ObjectId;
 use super::widgets::{self, hairline, inset_group, parse_number, segmented, switch_row};
 use crate::BrickMotionApp;
@@ -88,6 +88,8 @@ fn body(ui: &mut Ui, app: &mut BrickMotionApp, object: &KeyObject, frame: i32) {
     });
 
     scene_group(ui, app, &t);
+    flights_group(ui, app, &t, object);
+    check_group(ui, app, &t);
 
     group_heading(ui, &t, "Recording", "");
     inset_group(ui, |ui| {
@@ -214,6 +216,91 @@ fn scene_group(ui: &mut Ui, app: &mut BrickMotionApp, t: &Theme) {
         {
             let c = app.doc.session().set_key_scene(s);
             app.edited(c);
+        }
+    });
+}
+
+/// Flights: bake the chosen object's planned flight into keys (asks first when keys go), and send
+/// an edited flight back to Build or to the planner.
+fn flights_group(ui: &mut Ui, app: &mut BrickMotionApp, t: &Theme, object: &KeyObject) {
+    let note = match object.keys.len() {
+        0 => String::new(),
+        1 => "replaces 1 key".into(),
+        n => format!("replaces {n} keys"),
+    };
+    group_heading(ui, t, "Flights", &note);
+    inset_group(ui, |ui| {
+        if app.bake.busy() {
+            link_row(ui, |ui| {
+                ui.label(RichText::new("Baking flights…").size(12.5).color(t.text3));
+            });
+        } else {
+            if links(ui, t, &["Bake Flights to Keys"]).is_some() {
+                crate::flights::bake(app, false);
+            }
+            hairline(ui);
+            if links(ui, t, &["Bake All and Detach Build"]).is_some() {
+                crate::flights::bake(app, true);
+            }
+        }
+        if object.baked && !object.submodel {
+            hairline(ui);
+            let local = crate::flights::is_local(app.doc.session(), object.piece);
+            let labels: &[&str] = if local { &["Use in Build", "Return to Planner"] } else { &["Return to Planner"] };
+            match links(ui, t, labels).map(|i| labels[i]) {
+                Some("Use in Build") => crate::flights::use_edited_flight(app, object.piece),
+                Some(_) => crate::flights::return_to_planner(app, object.piece),
+                None => {}
+            }
+        }
+    });
+    if let Some(note) = app.flights.note.clone() {
+        widgets::footnote(ui, t, &note);
+    }
+}
+
+/// Check Motion: where the chosen piece's keyed motion crosses other parts. A contact seeks to its
+/// first frame and selects and frames both parts.
+fn check_group(ui: &mut Ui, app: &mut BrickMotionApp, t: &Theme) {
+    group_heading(ui, t, "Check Motion", "");
+    inset_group(ui, |ui| {
+        if app.audit.busy() {
+            link_row(ui, |ui| {
+                ui.label(RichText::new("Checking motion…").size(12.5).color(t.text3));
+            });
+        } else {
+            let label = if app.flights.check.is_some() { "Check Motion Again" } else { "Check Motion" };
+            link_row(ui, |ui| {
+                if link(ui, t, label, t.accent).clicked() {
+                    crate::flights::check_motion(app);
+                }
+            });
+        }
+        let Some(check) = app.flights.check.clone() else { return };
+        hairline(ui);
+        egui::Frame::NONE.inner_margin(egui::Margin::symmetric(12, 8)).show(ui, |ui| {
+            ui.set_width(ui.available_width());
+            ui.label(RichText::new(&check.text).size(12.0).color(if check.warning { t.text1 } else { t.text2 }));
+        });
+        for contact in &check.contacts {
+            hairline(ui);
+            let title = format!("{} crosses {}", contact.part, contact.blocker);
+            let when = if contact.first_frame == contact.last_frame {
+                format!("Frame {}", contact.first_frame)
+            } else {
+                format!("Frames {}–{}", contact.first_frame, contact.last_frame)
+            };
+            let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 42.0), Sense::click());
+            resp.widget_info(|| WidgetInfo::labeled(egui::Role::Button, true, format!("{title}, {when}")));
+            if resp.hovered() {
+                ui.painter().rect_filled(rect, 0.0, egui::Color32::from_white_alpha(8));
+            }
+            let p = ui.painter_at(rect.shrink2(vec2(12.0, 0.0)));
+            p.text(pos2(rect.left() + 12.0, rect.top() + 14.0), Align2::LEFT_CENTER, &title, FontId::proportional(12.5), t.text1);
+            p.text(pos2(rect.left() + 12.0, rect.top() + 30.0), Align2::LEFT_CENTER, &when, FontId::proportional(11.0), t.text3);
+            if resp.on_hover_cursor(egui::CursorIcon::PointingHand).clicked() {
+                crate::flights::show_contact(app, contact);
+            }
         }
     });
 }

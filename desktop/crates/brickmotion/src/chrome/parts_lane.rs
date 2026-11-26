@@ -652,6 +652,9 @@ enum PartMenuAction {
     ReorderArrival { step: usize, from: usize, to: usize },
     SplitSelected { step: usize, pieces: Vec<u32>, same_step: bool },
     Delete { pieces: Vec<u32> },
+    EditFlight { piece: u32, start: f64 },
+    UseEditedFlight { piece: u32 },
+    ReturnFlight { piece: u32 },
 }
 
 fn part_context_menu(
@@ -705,6 +708,25 @@ fn part_context_menu(
         if ui.button("Frame in View").clicked() {
             *out = Some(PartMenuAction::Frame { pieces: ids.clone(), end: clip.end });
             ui.close();
+        }
+        if single {
+            ui.separator();
+            ui.label(RichText::new("Flight").size(11.0).color(app.theme.text3));
+            if ui.button("Edit Flight as Keys").clicked() {
+                *out = Some(PartMenuAction::EditFlight { piece: clip.piece, start: clip.start });
+                ui.close();
+            }
+            if session.has_editable_flight_keys(clip.piece) {
+                // Only a part of this model (not inside a submodel) can take a route back to Build.
+                if item_index.is_some() && ui.button("Use Edited Flight in Build").clicked() {
+                    *out = Some(PartMenuAction::UseEditedFlight { piece: clip.piece });
+                    ui.close();
+                }
+                if ui.button("Return Flight to Planner").clicked() {
+                    *out = Some(PartMenuAction::ReturnFlight { piece: clip.piece });
+                    ui.close();
+                }
+            }
         }
 
         if let (Some(step), Some(index)) = (step_idx, item_index) {
@@ -817,6 +839,9 @@ fn part_context_menu(
 
 fn apply_part_menu(app: &mut BrickMotionApp, action: PartMenuAction) {
     match action {
+        PartMenuAction::EditFlight { piece, start } => crate::flights::edit_flight(app, piece, start),
+        PartMenuAction::UseEditedFlight { piece } => crate::flights::use_edited_flight(app, piece),
+        PartMenuAction::ReturnFlight { piece } => crate::flights::return_to_planner(app, piece),
         PartMenuAction::Frame { pieces, end } => {
             app.doc.session().select(&pieces, bm::SelectMode::Replace);
             if let Some(vp) = app.doc.viewport() {

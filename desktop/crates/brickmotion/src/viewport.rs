@@ -108,7 +108,7 @@ struct AutoDrag {
     frame: i32,
 }
 
-fn beep() {
+pub(crate) fn beep() {
     #[cfg(target_os = "macos")]
     {
         #[link(name = "AppKit", kind = "framework")]
@@ -138,6 +138,8 @@ pub struct ViewportWidget {
     generation: Option<u64>,
     /// The last viewport rectangle in egui points.
     pub(crate) last_rect: Option<Rect>,
+    /// Set for one frame when an overlay owns the primary button (no pick, orbit or gizmo).
+    pub block_primary: bool,
     /// The active move/rotate gizmo drawn over the viewport, when visible.
     pub(crate) gizmo: Option<GizmoShape>,
     hovered: Handle,
@@ -292,7 +294,8 @@ impl ViewportWidget {
         });
 
         // Handle live placement pointer moves and primary click to place.
-        let mut gizmo_consumed_primary = false;
+        // The flight path overlay took the press (see `flight_path::handle_pointer`).
+        let mut gizmo_consumed_primary = std::mem::take(&mut self.block_primary);
         if let Some(placement) = edit.placement.as_mut() {
             gizmo_consumed_primary = true;
             if let Some(vp) = doc.viewport() {
@@ -359,7 +362,7 @@ impl ViewportWidget {
                     self.auto_drag = None;
                     doc.session().end_gesture();
                 }
-            } else if primary_pressed
+            } else if primary_pressed && !gizmo_consumed_primary
                 && let Some(pos) = latest_pos.filter(|p| rect.contains(*p))
                 && (resp.hovered() || resp.is_pointer_button_down_on())
                 && let Some(shape) = &self.gizmo

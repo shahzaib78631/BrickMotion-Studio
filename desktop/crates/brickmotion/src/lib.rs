@@ -5,6 +5,8 @@ pub mod chrome;
 pub mod commands;
 pub mod document;
 pub mod edit;
+pub mod flight_path;
+pub mod flights;
 pub mod gizmo;
 pub mod history;
 mod icons;
@@ -21,6 +23,7 @@ pub mod support;
 mod theme;
 pub mod transport;
 pub mod viewport;
+pub mod workers;
 
 pub use app::{Answer, BrickMotionApp, DialogRequest, Pending, ReplaceOk, Workspace};
 pub use document::{DocState, save_to};
