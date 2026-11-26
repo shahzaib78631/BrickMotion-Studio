@@ -174,6 +174,9 @@ pub struct BrickMotionApp {
     pub queue_panel: chrome::queue_panel::QueuePanel,
     pub movie: chrome::export_movie::MoviePanel,
     pub still: chrome::export_still::StillPanel,
+    /// Model Checks floating panel and last refused edit.
+    pub checks: chrome::checks_panel::ChecksPanel,
+    pub last_refusal: Option<String>,
     /// View › Record Viewport.
     pub recording: crate::recording::RecordingState,
     /// (generation, version) → how many submodels can be filmed; read by `ctx` every frame.
@@ -284,6 +287,8 @@ impl BrickMotionApp {
             queue_panel: Default::default(),
             movie: Default::default(),
             still: Default::default(),
+            checks: Default::default(),
+            last_refusal: None,
             recording: Default::default(),
             submodel_count: Default::default(),
             window: None,
@@ -413,6 +418,8 @@ impl BrickMotionApp {
         self.flights.reset();
         self.motion = Default::default();
         self.joints.reset();
+        self.checks.reset();
+        self.last_refusal = None;
         // The old document (and its renderer) goes, off this thread; the widget sets the new one up.
         crate::loader::retire(std::mem::replace(&mut self.doc, doc));
         self.viewport.reset();
@@ -810,6 +817,7 @@ impl BrickMotionApp {
             "file.export_plan" => self.export_bytes(crate::FileExport::Plan, None),
             "edit.copy_viewport" => self.copy_viewport_image(),
             "model.look" | "view.look" => chrome::look_panel::toggle(self),
+            "inspect.model_checks" => chrome::checks_panel::toggle(self),
             "output.render_queue" => chrome::queue_panel::toggle(self),
             "output.export_still" => chrome::export_still::toggle(self),
             "file.export_movie" => chrome::export_movie::open(self, Vec::new()),
@@ -956,6 +964,7 @@ impl BrickMotionApp {
     /// After an edit: a refusal becomes a notice.
     pub(crate) fn edited(&mut self, c: bm::Changed) {
         if let Some(why) = c.refused {
+            self.last_refusal = Some(why.clone());
             crate::notices::push(&mut self.notices, Notice::Warning { title: "Couldn't edit".into(), detail: why });
         }
     }
@@ -1029,6 +1038,7 @@ impl BrickMotionApp {
                 ctx.request_repaint();
             }
             Some(crate::placement::Placed::Refused(why)) => {
+                self.last_refusal = Some(why.clone());
                 crate::notices::push(&mut self.notices, Notice::Warning { title: "Couldn't place part".into(), detail: why });
             }
             None => {
@@ -1061,6 +1071,8 @@ impl BrickMotionApp {
         self.flights.reset();
         self.motion = Default::default();
         self.joints.reset();
+        self.checks.reset();
+        self.last_refusal = None;
         let mut s = bm::Session::new();
         match s.new_blank() {
             Ok(_) => {
@@ -1348,6 +1360,7 @@ impl eframe::App for BrickMotionApp {
             self.keys.sync(self.doc.session());
             crate::flights::poll(self, ui.ctx());
             chrome::joints::sync(self, ui.ctx());
+            chrome::checks_panel::sync(self, ui.ctx());
             crate::flight_path::delete_key(self, ui.ctx());
             chrome::keys_track::delete_key(self, ui.ctx());
         }

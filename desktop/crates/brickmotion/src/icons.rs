@@ -30,7 +30,7 @@ icons! {
     Wand => "wand", Vid => "vid", Queue => "queue", Target => "target", More => "more",
     Cursor => "cursor", Razor => "razor", Magnet => "magnet", Marker => "marker", Prev => "prev",
     Next => "next", Play => "playf", Pause => "pause", Loop => "loop", Pin => "pin", Back => "back",
-    ChevUpDown => "chev_ud", File => "file",
+    ChevUpDown => "chev_ud", File => "file", Checks => "checks",
 }
 
 /// The SVG with its strokes in white, so `tint` gives the final colour.
