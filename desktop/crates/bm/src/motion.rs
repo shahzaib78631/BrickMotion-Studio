@@ -675,6 +675,15 @@ impl Inspection {
         LoosePieces { rows, error: (!error.is_empty()).then_some(error), raw: h }
     }
 
+    /// Fit Together: poses that seat `moving` onto `target`, best first.
+    pub fn fits(&mut self, moving: u32, target: u32) -> Vec<Pose> {
+        let n = unsafe { sys::bm_inspection_fits(self.raw, moving, target, std::ptr::null_mut(), 0) };
+        let mut out = vec![sys::BmPieceMove { piece: moving, rotation: Mat3::IDENTITY.to_raw(), position: Vec3::default().to_raw() }; n];
+        let got = unsafe { sys::bm_inspection_fits(self.raw, moving, target, out.as_mut_ptr(), n) };
+        out.truncate(got.min(n));
+        out.into_iter().map(|m| Pose { rotation: Mat3::from_raw(m.rotation), position: Vec3::from_raw(m.position) }).collect()
+    }
+
     pub fn habit_fits(&mut self, piece: u32, limit: usize) -> Vec<HabitFit> {
         let h = unsafe { sys::bm_inspection_habit_fits(self.raw, piece, limit) };
         if h.is_null() {

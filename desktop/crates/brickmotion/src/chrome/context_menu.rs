@@ -132,6 +132,9 @@ fn piece_rows(app: &mut BrickMotionApp, piece: u32) -> Vec<Row> {
     out.push(Row::plain(Some(Icon::Paint), "Use This Colour for New Parts", Action::UseColour(colour), colour != app.edit.colour));
     out.push(Sep);
 
+    if sel.len() == 2 {
+        out.push(cmd(app, "model.fit_together"));
+    }
     out.push(cmd(app, "model.make_submodel"));
     if in_use {
         out.push(cmd(app, "model.extract"));

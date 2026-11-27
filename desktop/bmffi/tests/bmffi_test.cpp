@@ -79,6 +79,27 @@ TEST_CASE("metal is available exactly when a viewport can be made") {
   bm_session_free(s);
 }
 
+TEST_CASE("marquee takes the pieces inside a rectangle") {
+  BmSession* s = bm_session_new();
+  bm_open_result_free(bm_session_open(s, kHeli));
+  BmViewport* v = bm_viewport_new(s);
+  if (!v) {
+    bm_session_free(s);
+    return;
+  }
+  bm_viewport_resize(v, 400, 300, 1.0);
+  bm_viewport_fit_all(v);
+  bm_viewport_draw(v);
+  const size_t all = bm_viewport_marquee(v, 0, 0, 400, 300, false, nullptr, 0);
+  CHECK(all > 0);
+  std::vector<uint32_t> got(all);
+  CHECK(bm_viewport_marquee(v, 400, 300, 0, 0, false, got.data(), got.size()) == all);  // either corner first
+  CHECK(bm_viewport_marquee(v, 0, 0, 3, 3, false, nullptr, 0) == 0);
+  CHECK(bm_viewport_marquee(nullptr, 0, 0, 400, 300, false, nullptr, 0) == 0);
+  bm_viewport_free(v);
+  bm_session_free(s);
+}
+
 TEST_CASE("focus a submodel and return to the main model") {
   BmSession* s = bm_session_new();
   BmOpenResult r = bm_session_open(s, kHeli);

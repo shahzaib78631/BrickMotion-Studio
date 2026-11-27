@@ -7,6 +7,8 @@ use crate::{Camera, Mat3, Vec2, Vec3};
 pub enum GizmoKind {
     Move,
     Rotate,
+    /// The Move stalks without their planes; the app draws square tips and a centre disc.
+    Scale,
 }
 
 #[derive(Clone, Copy, Default, PartialEq, Eq, Debug)]
@@ -63,7 +65,7 @@ unsafe impl Send for GizmoShape {}
 impl GizmoShape {
     pub fn new(camera: &Camera, view: Vec2, origin: Vec3, axes: Mat3, kind: GizmoKind) -> GizmoShape {
         let k = match kind {
-            GizmoKind::Move => sys::BM_GIZMO_MOVE,
+            GizmoKind::Move | GizmoKind::Scale => sys::BM_GIZMO_MOVE,
             GizmoKind::Rotate => sys::BM_GIZMO_ROTATE,
         };
         let raw = unsafe { sys::bm_gizmo_shape(camera.to_raw(), view.to_raw(), origin.to_raw(), axes.to_raw(), k) };
@@ -87,6 +89,9 @@ impl GizmoShape {
             raw_pts.truncate(total.min(n));
             let pts = raw_pts.into_iter().map(Vec2::from_raw).collect();
             rings.push((pts, h));
+        }
+        if kind == GizmoKind::Scale {
+            rings.clear();
         }
         GizmoShape { lines, rings, raw }
     }

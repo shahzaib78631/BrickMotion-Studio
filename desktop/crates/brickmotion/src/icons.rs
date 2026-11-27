@@ -20,7 +20,7 @@ macro_rules! icons {
 
 icons! {
     Brick => "brick", Plus => "plus", Minus => "minus", Import => "import", Inventory => "inventory",
-    Move => "move", Rotate => "rotate", Paint => "paint", Replace => "replace", Copy => "copy",
+    Move => "move", Rotate => "rotate", Scale => "scale", Paint => "paint", Replace => "replace", Copy => "copy",
     Group => "group", Extract => "extract", Step => "step", Seat => "seat", Search => "search",
     Eye => "eye", EyeOff => "eyeoff", Sliders => "sliders", Home => "home", Undo => "undo",
     Redo => "redo", Close => "close", Gear => "gear", Help => "help", Grip => "grip",

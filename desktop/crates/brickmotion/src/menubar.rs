@@ -93,6 +93,7 @@ pub fn menu_model() -> Vec<MenuSection> {
                 C("model.add_part"),
                 C("model.replace"),
                 C("model.recolour"),
+                C("model.fit_together"),
                 Sep,
                 C("model.make_submodel"),
                 C("model.extract"),

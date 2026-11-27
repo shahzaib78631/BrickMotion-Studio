@@ -25,7 +25,8 @@ pub fn handle(app: &mut BrickMotionApp, ctx: &egui::Context) {
         || app.shortcuts_open || app.settings.open || app.about_open
         // An open menu or popup owns Esc and the arrow keys.
         || egui::Popup::is_any_open(ctx)
-        || crate::chrome::widgets::slider_active(ctx);
+        || crate::chrome::widgets::slider_active(ctx)
+        || crate::chrome::transform::editing(ctx);
 
     // While placing a part, Tab, ⇧Tab, R, Return and Esc belong to the placement before the registry.
     if !typing && app.edit.placement.is_some() {
@@ -76,8 +77,5 @@ pub fn handle(app: &mut BrickMotionApp, ctx: &egui::Context) {
             app.edit.alt_held = false;
         }
     }
-    // S opens the palette too (⌘K is its listed shortcut).
-    if !typing && ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::S)) {
-        run(app, "view.palette");
-    }
+    // S was a second key for the palette; it is the Scale tool's now (⌘K opens the palette).
 }

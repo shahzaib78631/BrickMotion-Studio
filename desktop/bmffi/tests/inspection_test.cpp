@@ -3,6 +3,7 @@
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 
 #include <chrono>
+#include <cmath>
 #include <filesystem>
 #include <fstream>
 #include <string>
@@ -215,4 +216,46 @@ TEST_CASE("joint info and extended joint edits over bmffi", "[inspection][joints
   bm_joint_info_free(nullptr);
   bm_inspection_free(insp);
   bm_session_free(s);
+}
+
+TEST_CASE("pose readback and Fit Together over bmffi", "[inspection][p3]") {
+  BmSession* s = blankSession();
+  place(s, "3001.dat", 4, BmVec3{0, 0, 0});
+  place(s, "3001.dat", 1, BmVec3{200, -96, 40});
+
+  const BmPieceMove p = bm_session_pose_of(s, 1);
+  CHECK(p.piece == 1);
+  CHECK_THAT(p.position.x, WithinAbs(200, 1e-9));
+  CHECK_THAT(p.position.y, WithinAbs(-96, 1e-9));
+  CHECK_THAT(p.position.z, WithinAbs(40, 1e-9));
+  CHECK_THAT(p.rotation.m[0], WithinAbs(1, 1e-9));
+  CHECK_THAT(p.rotation.m[4], WithinAbs(1, 1e-9));
+
+  // Scale shows in the rotation's column lengths.
+  uint32_t one[] = {1};
+  REQUIRE(ok(bm_session_scale(s, one, 1, BmVec3{2, 1, 1}, kEye, p.position, false)));
+  const BmPieceMove scaled = bm_session_pose_of(s, 1);
+  CHECK_THAT(scaled.rotation.m[0], WithinAbs(2, 1e-9));
+  // Out of range: identity at the origin.
+  const BmPieceMove none = bm_session_pose_of(s, 99);
+  CHECK_THAT(none.rotation.m[0], WithinAbs(1, 1e-9));
+  CHECK_THAT(none.position.x, WithinAbs(0, 1e-9));
+  bm_session_free(s);
+
+  // Two plain bricks apart: Fit Together finds a seat for the second on the first.
+  BmSession* t = blankSession();
+  place(t, "3001.dat", 4, BmVec3{0, 0, 0});
+  place(t, "3001.dat", 1, BmVec3{300, -200, 0});
+  BmInspection* insp = bm_inspection_capture(t);
+  REQUIRE(insp != nullptr);
+  BmPieceMove fits[8]{};
+  const size_t n = bm_inspection_fits(insp, 1, 0, fits, 8);
+  CHECK(n >= 1);
+  CHECK(fits[0].piece == 1);
+  // A seated 2x4 sits a brick's height (24 LDU) above or below the first.
+  CHECK_THAT(std::abs(fits[0].position.y), WithinAbs(24, 1e-6));
+  CHECK(bm_inspection_fits(insp, 1, 0, nullptr, 0) == n);
+  CHECK(bm_inspection_fits(nullptr, 1, 0, fits, 8) == 0);
+  bm_inspection_free(insp);
+  bm_session_free(t);
 }

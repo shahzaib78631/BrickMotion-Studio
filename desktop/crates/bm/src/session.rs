@@ -206,6 +206,13 @@ impl Session {
         Mat3::from_raw(unsafe { sys::bm_session_axes_of(self.raw, piece) })
     }
 
+    /// Where `piece` sits in the open model: its rotation (columns scaled by any Scale) and
+    /// position, in LDraw units. Identity at the origin for an unknown piece.
+    pub fn pose_of(&self, piece: u32) -> crate::Pose {
+        let m = unsafe { sys::bm_session_pose_of(self.raw, piece) };
+        crate::Pose { rotation: Mat3::from_raw(m.rotation), position: crate::Vec3::from_raw(m.position) }
+    }
+
     pub fn copy(&self, pieces: &[u32]) -> String {
         take_string(unsafe { sys::bm_session_copy(self.raw, pieces.as_ptr(), pieces.len()) })
     }

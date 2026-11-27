@@ -875,6 +875,7 @@ unsafe extern "C" {
     pub fn bm_viewport_set_background(v: *mut BmViewport, r: f64, g: f64, b: f64);
     pub fn bm_viewport_set_orthographic(v: *mut BmViewport, on: bool);
     pub fn bm_viewport_pick(v: *mut BmViewport, x_pt: f64, y_pt: f64) -> u32;
+    pub fn bm_viewport_marquee(v: *mut BmViewport, x0: f64, y0: f64, x1: f64, y1: f64, touching: bool, out: *mut u32, cap: usize) -> usize;
     pub fn bm_viewport_frame_selection(v: *mut BmViewport);
 
     pub fn bm_change_free(c: BmChange);
@@ -1250,6 +1251,8 @@ unsafe extern "C" {
     pub fn bm_fitting_parts_name(f: *const BmFittingParts, i: usize) -> *const c_char;
     pub fn bm_fitting_parts_contact(f: *const BmFittingParts, i: usize) -> BmVec3;
     pub fn bm_fitting_parts_free(f: *mut BmFittingParts);
+    pub fn bm_session_pose_of(s: *const BmSession, piece: u32) -> BmPieceMove;
+    pub fn bm_inspection_fits(i: *mut BmInspection, moving: u32, target: u32, out: *mut BmPieceMove, cap: usize) -> usize;
     pub fn bm_session_seat_pieces(s: *mut BmSession, moves: *const BmPieceMove, n: usize, generation: u64, version: u64) -> BmChange;
     pub fn bm_inventory_capture(s: *const BmSession, step: i32) -> *mut BmInventory;
     pub fn bm_inventory_prepare(inv: *mut BmInventory, path: *const c_char) -> *mut BmInventoryReport;
@@ -1306,7 +1309,7 @@ pub const DECLARED: &[&str] = &[
     "bm_viewport_new", "bm_metal_available", "bm_viewport_free", "bm_viewport_ok", "bm_viewport_resize", "bm_viewport_draw",
     "bm_viewport_needs_draw", "bm_viewport_readback", "bm_viewport_orbit", "bm_viewport_pan",
     "bm_viewport_zoom_toward", "bm_viewport_fit_all", "bm_viewport_view", "bm_viewport_set_background",
-    "bm_viewport_set_orthographic", "bm_viewport_pick", "bm_viewport_frame_selection",
+    "bm_viewport_set_orthographic", "bm_viewport_pick", "bm_viewport_marquee", "bm_viewport_frame_selection",
     "bm_change_free", "bm_session_new_blank", "bm_session_project_bytes", "bm_session_imported",
     "bm_session_dirty", "bm_session_mark_saved", "bm_session_version", "bm_session_structure_version",
     "bm_session_can_undo", "bm_session_can_redo", "bm_session_undo_name", "bm_session_redo_name",
@@ -1419,5 +1422,5 @@ pub const DECLARED: &[&str] = &[
     "bm_session_move_to_model", "bm_session_rename_submodel", "bm_session_delete_submodel", "bm_session_make_unique",
     "bm_session_set_group", "bm_session_group_names", "bm_session_groups_of", "bm_session_select_group",
     "bm_session_scale", "bm_model_import_read", "bm_model_import_error", "bm_session_import_model",
-    "bm_model_import_free",
+    "bm_model_import_free", "bm_session_pose_of", "bm_inspection_fits",
 ];

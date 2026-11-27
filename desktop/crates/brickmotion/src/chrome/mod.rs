@@ -39,6 +39,7 @@ pub mod steps;
 pub mod swatches;
 pub mod timeline;
 pub mod titlebar;
+pub mod transform;
 pub mod tree;
 pub mod viewbar;
 pub mod widgets;

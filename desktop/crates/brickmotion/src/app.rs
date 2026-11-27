@@ -64,6 +64,9 @@ pub enum Answer {
     Cancel,
 }
 
+/// Fit Together's job key: generation, version and the two pieces (target, moving).
+type FitKey = (u64, u64, [u32; 2]);
+
 pub struct BrickMotionApp {
     pub workspace: Workspace,
     pub ribbon_tab: &'static str,
@@ -213,6 +216,11 @@ pub struct BrickMotionApp {
     pub timeline: chrome::timeline::TimelineState,
     /// Active page in the right-hand Properties panel.
     pub properties_page: chrome::properties::Page,
+    /// The axis and pivot of an open Transform scrub.
+    pub(crate) transform_gesture: Option<chrome::transform::Gesture>,
+    /// Fit Together's search, keyed by (generation, version, [target, moving]).
+    fit_job: crate::workers::Job<FitKey, Vec<bm::Pose>>,
+    fit_key: Option<FitKey>,
     /// Draft state for the Build Settings page.
     pub build_settings: chrome::build_settings::BuildSettingsState,
     /// Draft state for the Build Staging page.
@@ -334,6 +342,9 @@ impl BrickMotionApp {
             camera_synced: None,
             timeline: chrome::timeline::TimelineState::default(),
             properties_page: chrome::properties::Page::Inspector,
+            transform_gesture: None,
+            fit_job: Default::default(),
+            fit_key: None,
             build_settings: chrome::build_settings::BuildSettingsState::default(),
             staging: chrome::staging::StagingState::default(),
             sound_page: chrome::sound::SoundPageState::default(),
@@ -381,6 +392,84 @@ impl BrickMotionApp {
         self.camera_selection = None;
         self.motion.target = None;
         self.joints.open = None;
+    }
+
+    /// Fit Together: seats the second selected piece on a free connector of the first, found on a
+    /// worker (the Swift app's flow). The answer is dropped if the model changed meanwhile.
+    pub(crate) fn start_fit_together(&mut self) {
+        let sel = self.doc.session().selection();
+        let [target, moving] = sel[..] else { return };
+        if self.fit_job.busy() {
+            return;
+        }
+        let s = self.doc.session();
+        let key = (s.generation(), s.version(), [target, moving]);
+        let Some(mut inspection) = bm::motion::Inspection::capture(s) else { return };
+        let wake = self.ctx_handle();
+        if self.fit_job.start(key, move || {
+            let fits = inspection.fits(moving, target);
+            if let Some(ctx) = wake {
+                ctx.request_repaint();
+            }
+            fits
+        }) {
+            self.fit_key = Some(key);
+        }
+    }
+
+    fn poll_fit_together(&mut self) {
+        let Some(key) = self.fit_key else { return };
+        let s = self.doc.session();
+        let now = (s.generation(), s.version(), key.2);
+        let still = s.selection() == key.2;
+        match self.fit_job.poll(&now) {
+            None => {}
+            Some(Err(_)) => self.fit_key = None,
+            Some(Ok(fits)) => {
+                self.fit_key = None;
+                if !still {
+                    return;
+                }
+                let [_, moving] = key.2;
+                let c = match fits.first() {
+                    Some(&pose) => s.place_moved(&[moving], moving, pose, key.0, key.1),
+                    None => bm::Changed {
+                        structure: false,
+                        version: s.version(),
+                        refused: Some("No clear connector placement was found for these pieces.".into()),
+                    },
+                };
+                self.edited(c);
+            }
+        }
+    }
+
+    #[doc(hidden)]
+    pub fn fit_together_busy(&self) -> bool {
+        self.fit_job.busy()
+    }
+
+    /// The tree row menu's Play Its Build: opens the submodel and plays its build from the start.
+    pub fn play_submodel_build(&mut self, path: &[String]) {
+        self.focus_submodel(path);
+        self.set_workspace(Workspace::Animate);
+        if let Some(vp) = self.doc.viewport() {
+            vp.play_range(0.0, 0.0);
+            self.transport.state = vp.playback_state();
+        }
+    }
+
+    /// The tree row menu's Lay Out Its Parts: opens the submodel and lays every part flat on the
+    /// floor, seen square from the top.
+    pub fn lay_out_submodel(&mut self, path: &[String]) {
+        self.focus_submodel(path);
+        if let Some(vp) = self.doc.viewport() {
+            self.transport.arrange(vp, None, bm::playback::AssemblyPreview::LaidOut);
+            vp.set_orthographic(true);
+            vp.view(bm::ViewPreset::Top);
+        } else {
+            self.transport.step_preview = Some(bm::playback::AssemblyPreview::LaidOut);
+        }
     }
 
     /// Focuses the viewport on a submodel path (empty returns to the main model), matching web's submodel view.
@@ -789,6 +878,15 @@ impl BrickMotionApp {
                     crate::edit::Tool::Select
                 } else {
                     crate::edit::Tool::Rotate
+                };
+            }
+            "model.fit_together" => self.start_fit_together(),
+            "model.scale_tool" => {
+                self.viewport.nav_mode = None;
+                self.edit.tool = if self.edit.tool == crate::edit::Tool::Scale {
+                    crate::edit::Tool::Select
+                } else {
+                    crate::edit::Tool::Scale
                 };
             }
             "model.rotate" => crate::edit::turn(self, true),
@@ -1527,6 +1625,17 @@ impl BrickMotionApp {
     }
 
     #[doc(hidden)]
+    pub fn scale_gizmo_hit(&self, p: bm::Vec2) -> bm::gizmo::Handle {
+        self.viewport.gizmo.as_ref().map_or(bm::gizmo::Handle::None, |g| crate::gizmo::scale_hit(g, p))
+    }
+
+    /// The Scale chip's text while a scale drag is under way.
+    #[doc(hidden)]
+    pub fn scale_readout(&self) -> Option<String> {
+        self.viewport.scale_readout()
+    }
+
+    #[doc(hidden)]
     pub fn gizmo_ring(&self, handle: bm::gizmo::Handle) -> Option<Vec<bm::Vec2>> {
         self.viewport
             .gizmo
@@ -1688,6 +1797,7 @@ impl eframe::App for BrickMotionApp {
             chrome::checks_panel::sync(self, ui.ctx());
             chrome::loose_panel::sync(self, ui.ctx());
             chrome::fits_panel::sync(self, ui.ctx());
+            self.poll_fit_together();
             crate::flight_path::delete_key(self, ui.ctx());
             chrome::keys_track::delete_key(self, ui.ctx());
         }

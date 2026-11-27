@@ -33,6 +33,7 @@ pub fn show(ui: &mut Ui, app: &mut BrickMotionApp, area: Rect) {
                             (Icon::Cursor, "Select Tool", crate::Tool::Select, "tool.select"),
                             (Icon::Move, "Move Tool", crate::Tool::Move, "model.move"),
                             (Icon::Rotate, "Rotate Tool", crate::Tool::Rotate, "model.rotate_tool"),
+                            (Icon::Scale, "Scale Tool", crate::Tool::Scale, "model.scale_tool"),
                         ] {
                             let active = app.edit.tool == tool && app.viewport.nav_mode.is_none();
                             let tip = if !doc_on {

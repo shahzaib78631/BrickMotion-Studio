@@ -16,6 +16,7 @@ pub struct GizmoDrag {
     pub pieces: Vec<u32>,
     moved: Vec3,
     turned: f64,
+    scaled: f64,
 }
 
 impl GizmoDrag {
@@ -28,6 +29,7 @@ impl GizmoDrag {
             pieces,
             moved: Vec3::ZERO,
             turned: 0.0,
+            scaled: 1.0,
         }
     }
 
@@ -49,6 +51,21 @@ impl GizmoDrag {
         }
         self.turned = degrees;
         Some(delta)
+    }
+
+    /// The ratio from the factor already applied to `factor`, or None if unchanged.
+    pub fn step_scale(&mut self, factor: f64) -> Option<f64> {
+        if (factor - self.scaled).abs() < 1e-9 || self.scaled <= 0.0 {
+            return None;
+        }
+        let ratio = factor / self.scaled;
+        self.scaled = factor;
+        Some(ratio)
+    }
+
+    /// The factor the drag has applied so far.
+    pub fn scaled(&self) -> f64 {
+        self.scaled
     }
 
     pub fn moved(&self) -> Vec3 {
@@ -189,6 +206,75 @@ pub fn format_rotate(degrees: f64) -> String {
     }
 }
 
+/// Half the side of a Scale tip square, and the centre disc's radius, in points.
+pub const SCALE_TIP: f64 = 5.5;
+pub const SCALE_DISC: f64 = 7.0;
+
+/// Which Scale handle is at `p`: a tip square (its axis), the centre disc (`Handle::View`), or none.
+pub fn scale_hit(shape: &GizmoShape, p: Vec2) -> Handle {
+    let Some(&(origin, _, _)) = shape.lines.first() else { return Handle::None };
+    for &(_, tip, h) in &shape.lines {
+        if (p.x - tip.x).abs() <= SCALE_TIP + 3.0 && (p.y - tip.y).abs() <= SCALE_TIP + 3.0 {
+            return h;
+        }
+    }
+    if (p.x - origin.x).hypot(p.y - origin.y) <= SCALE_DISC + 3.0 { Handle::View } else { Handle::None }
+}
+
+/// The factor a Scale drag from `a` to `b` gives. An axis handle grows by how far the pointer moved
+/// along the stalk, in stalk lengths; the disc grows to the right and up. Kept to 0.05×–20×; with
+/// `snap` (⇧), to 0.25× steps.
+pub fn scale_factor(origin: Vec2, tip: Vec2, handle: Handle, a: Vec2, b: Vec2, snap: bool) -> f64 {
+    let (dx, dy) = (b.x - a.x, b.y - a.y);
+    let f = if handle == Handle::View {
+        1.0 + (dx - dy) / 120.0
+    } else {
+        let (ux, uy) = (tip.x - origin.x, tip.y - origin.y);
+        let len2 = ux * ux + uy * uy;
+        if len2 < 1.0 { 1.0 } else { 1.0 + (dx * ux + dy * uy) / len2 }
+    };
+    let f = if snap { ((f * 4.0).round() / 4.0).max(0.25) } else { f };
+    f.clamp(0.05, 20.0)
+}
+
+/// "Scale · Y 1.50×", or "Scale · 1.50×" for the disc.
+pub fn format_scale(handle: Handle, factor: f64) -> String {
+    let axis = match handle {
+        Handle::X => "X ",
+        Handle::Y => "Y ",
+        Handle::Z => "Z ",
+        _ => "",
+    };
+    format!("Scale · {axis}{factor:.2}×")
+}
+
+/// Paints the Scale gizmo: a stalk and a square tip per axis, and a disc in the middle.
+pub fn paint_scale(painter: &Painter, t: &Theme, rect: Rect, shape: &GizmoShape, active: Handle, hovered: Handle) {
+    let highlight = if active != Handle::None { active } else { hovered };
+    let Some(&(origin, _, _)) = shape.lines.first() else { return };
+    for &(a, b, h) in &shape.lines {
+        let hot = h == highlight;
+        let color = with_alpha(handle_color(t, h), if hot { 255 } else { 217 });
+        let (pa, pb) = (to_screen(rect, a), to_screen(rect, b));
+        painter.line_segment([pa, pb], Stroke::new(if hot { 3.0 } else { 2.0 }, color));
+        let half = SCALE_TIP as f32 + if hot { 1.0 } else { 0.0 };
+        painter.rect_filled(Rect::from_center_size(pb, vec2(half * 2.0, half * 2.0)), 2.0, color);
+    }
+    let hot = highlight == Handle::View;
+    let o = to_screen(rect, origin);
+    painter.circle(o, SCALE_DISC as f32, t.knob, Stroke::new(if hot { 3.0 } else { 2.0 }, t.accent));
+}
+
+/// Paints the Scale chip in the viewport's bottom-right corner.
+pub fn paint_chip(painter: &Painter, theme: &Theme, rect: Rect, label: &str) {
+    let galley = painter.layout_no_wrap(label.to_owned(), FontId::proportional(12.0), theme.text1);
+    let pad = vec2(10.0, 5.0);
+    let size = galley.size() + pad * 2.0;
+    let bg = Rect::from_min_size(rect.right_bottom() - size - vec2(12.0, 12.0), size);
+    painter.rect(bg, 7.0, theme.float_fill(), Stroke::new(1.0, theme.border2), StrokeKind::Inside);
+    painter.galley(bg.min + pad, galley, theme.text1);
+}
+
 /// Paints a small floating readout pill near the pointer while dragging.
 pub fn paint_readout(painter: &Painter, theme: &Theme, pointer: Pos2, label: &str) {
     let galley = painter.layout_no_wrap(label.to_owned(), FontId::monospace(11.5), theme.text1);
@@ -217,6 +303,15 @@ mod tests {
         assert_eq!(d.step_rotate(15.0), Some(15.0));
         assert_eq!(d.step_rotate(30.0), Some(15.0));
         assert_eq!(d.step_rotate(30.0), None);
+    }
+
+    #[test]
+    fn step_scale_returns_ratios() {
+        let mut d = GizmoDrag::new(Handle::X, Vec2::default(), Vec3::ZERO, Mat3::IDENTITY, vec![0]);
+        assert_eq!(d.step_scale(2.0), Some(2.0));
+        assert_eq!(d.step_scale(1.0), Some(0.5));
+        assert_eq!(d.step_scale(1.0), None);
+        assert_eq!(format_scale(Handle::Y, 1.5), "Scale · Y 1.50×");
     }
 
     #[test]

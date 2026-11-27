@@ -3,7 +3,7 @@ use std::path::PathBuf;
 
 use bm::inventory::Inventory;
 use bm::motion::{CheckKind, Inspection};
-use bm::{Pose, Session, Vec3};
+use bm::{Mat3, Pose, Session, Vec3};
 
 fn blank() -> Session {
     let mut s = Session::new();
@@ -106,4 +106,27 @@ fn inventory_counts_rows() {
     assert_eq!(s.piece_count(), before + 2);
 
     let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn pose_of_reads_position_rotation_and_scale() {
+    let s = blank();
+    place(&s, "3001.dat", 4, Vec3::new(0.0, 0.0, 0.0));
+    place(&s, "3001.dat", 1, Vec3::new(200.0, -96.0, 40.0));
+    let p = s.pose_of(1);
+    assert_eq!(p.position, Vec3::new(200.0, -96.0, 40.0));
+    assert_eq!(p.rotation, Mat3::IDENTITY);
+    assert!(s.scale(&[1], Vec3::new(1.0, 1.5, 1.0), Mat3::IDENTITY, p.position, false).refused.is_none());
+    assert!((s.pose_of(1).rotation.m[4] - 1.5).abs() < 1e-9, "Y column is 1.5× long");
+}
+
+#[test]
+fn fit_together_seats_one_brick_on_another() {
+    let s = blank();
+    place(&s, "3001.dat", 4, Vec3::new(0.0, 0.0, 0.0));
+    place(&s, "3001.dat", 1, Vec3::new(300.0, -200.0, 0.0));
+    let mut insp = Inspection::capture(&s).unwrap();
+    let fits = insp.fits(1, 0);
+    assert!(!fits.is_empty());
+    assert!((fits[0].position.y.abs() - 24.0).abs() < 1e-6, "{:?}", fits[0]);
 }

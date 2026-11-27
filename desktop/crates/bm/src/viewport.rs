@@ -129,6 +129,16 @@ impl Viewport {
         (p != sys::BM_NO_PIECE).then_some(p)
     }
 
+    /// The shown pieces inside a rectangle (points from the top left, either corner first);
+    /// `touching` also takes the ones it only overlaps.
+    pub fn marquee(&mut self, a: Vec2, b: Vec2, touching: bool) -> Vec<u32> {
+        let n = unsafe { sys::bm_viewport_marquee(self.raw, a.x, a.y, b.x, b.y, touching, std::ptr::null_mut(), 0) };
+        let mut out = vec![0u32; n];
+        let total = unsafe { sys::bm_viewport_marquee(self.raw, a.x, a.y, b.x, b.y, touching, out.as_mut_ptr(), out.len()) };
+        out.truncate(total.min(n));
+        out
+    }
+
     pub fn camera(&self) -> Camera {
         Camera::from_raw(unsafe { sys::bm_viewport_camera(self.raw) })
     }

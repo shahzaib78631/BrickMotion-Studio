@@ -305,6 +305,7 @@ fn piece(ui: &mut Ui, app: &mut BrickMotionApp, p: &bm::PieceInfo, run: &mut Opt
             ui.label(RichText::new("Shared submodel: edits change every use").color(t.text2).size(11.5));
         }
     });
+    super::transform::section(ui, app);
 }
 
 fn colour_button_row(ui: &mut Ui, t: &crate::Theme, swatch: Option<Color32>, name: &str) -> bool {
@@ -363,6 +364,7 @@ fn many(ui: &mut Ui, app: &mut BrickMotionApp, snap: &bm::Snapshot) {
             ui.label(RichText::new(format!("Showing the first {}", snap.described.len())).color(t.text3).size(11.5));
         }
     });
+    super::transform::section(ui, app);
 }
 
 /// "Arrives": the selected parts' insertion direction (`ArrivalDirection.swift`).

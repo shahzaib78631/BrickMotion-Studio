@@ -151,8 +151,27 @@ fn selected_submodel_rows(app: &mut BrickMotionApp, selection: &HashSet<u32>) ->
     ids
 }
 
+/// The submodel focus path of row `i`: its ancestors' definitions down to it.
+fn focus_path(app: &BrickMotionApp, i: usize) -> Vec<String> {
+    let mut path = Vec::new();
+    let mut cur = Some(i);
+    while let Some(idx) = cur {
+        let r = &app.tree.rows[idx];
+        if !r.def.is_empty() {
+            path.push(r.def.clone());
+        }
+        cur = r.parent;
+    }
+    path.reverse();
+    path
+}
+
 /// What a submodel row's menu asked for, done after the tree is drawn.
 enum RowAction {
+    /// Play the build of the row at this index.
+    Play(usize),
+    /// Lay out the parts of the row at this index.
+    LayOut(usize),
     Rename(String),
     ImportInto(String),
     Delete(String),
@@ -245,6 +264,13 @@ pub fn show(ui: &mut Ui, app: &mut BrickMotionApp, body_h: f32, pinned_h: bool) 
                     if menu::item(ui, &t, Some(Icon::Layers), "Open", None, !row.unused) {
                         dbl_clicked = Some(i);
                     }
+                    let playable = row.pieces > 0 && !row.unused;
+                    if menu::item(ui, &t, Some(Icon::Play), "Play Its Build", None, playable) {
+                        row_action = Some(RowAction::Play(i));
+                    }
+                    if menu::item(ui, &t, Some(Icon::Stage), "Lay Out Its Parts", None, playable) {
+                        row_action = Some(RowAction::LayOut(i));
+                    }
                     menu::separator(ui, &t);
                     if menu::item(ui, &t, None, "Rename…", None, true) {
                         row_action = Some(RowAction::Rename(def.clone()));
@@ -277,17 +303,7 @@ pub fn show(ui: &mut Ui, app: &mut BrickMotionApp, body_h: f32, pinned_h: bool) 
         }
     });
     if let Some(i) = dbl_clicked {
-        // Walk ancestors up to root to build the submodel focus path.
-        let mut path = Vec::new();
-        let mut cur = Some(i);
-        while let Some(idx) = cur {
-            let r = &app.tree.rows[idx];
-            if !r.def.is_empty() {
-                path.push(r.def.clone());
-            }
-            cur = r.parent;
-        }
-        path.reverse();
+        let path = focus_path(app, i);
         if !path.is_empty() {
             app.focus_submodel(&path);
         }
@@ -313,6 +329,14 @@ pub fn show(ui: &mut Ui, app: &mut BrickMotionApp, body_h: f32, pinned_h: bool) 
         app.export_bytes(kind, Some(&def));
     }
     match row_action {
+        Some(RowAction::Play(i)) => {
+            let path = focus_path(app, i);
+            app.play_submodel_build(&path);
+        }
+        Some(RowAction::LayOut(i)) => {
+            let path = focus_path(app, i);
+            app.lay_out_submodel(&path);
+        }
         Some(RowAction::Rename(def)) => {
             app.naming = Some(super::naming::Naming::new(super::naming::NameFor::Rename(def.clone()), def, Vec::new()));
         }

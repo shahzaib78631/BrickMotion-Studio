@@ -869,6 +869,15 @@ Mat3 Session::axesOf(uint32_t piece) const {
   return out;
 }
 
+PartPose Session::worldPoseOf(uint32_t piece) const {
+  PartPose out;
+  if (!impl_->model || piece >= impl_->model->pieces().size()) return out;
+  const bm::Xform& w = impl_->model->pieces()[piece].world;
+  for (int k = 0; k < 9; k++) out.rotation.m[k] = w.r.m[k];
+  out.position = {w.t.x, w.t.y, w.t.z};
+  return out;
+}
+
 std::vector<uint32_t> Session::usePieces(uint32_t piece) const {
   const Impl& s = *impl_;
   if (piece >= s.refs.size()) return {};

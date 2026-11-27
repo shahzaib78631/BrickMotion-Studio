@@ -153,6 +153,25 @@ BmVec3 bm_fitting_parts_contact(const BmFittingParts* f, size_t i) {
 }
 void bm_fitting_parts_free(BmFittingParts* f) { delete f; }
 
+BmPieceMove bm_session_pose_of(const BmSession* s, uint32_t piece) {
+  BmPieceMove none{piece, BmMat3{{1, 0, 0, 0, 1, 0, 0, 0, 1}}, BmVec3{0, 0, 0}};
+  if (!s) return none;
+  return guard(none, [&] {
+    const bmapp::PartPose p = s->s->worldPoseOf(piece);
+    return BmPieceMove{piece, from_mat3(p.rotation), from_vec3(p.position)};
+  });
+}
+
+size_t bm_inspection_fits(BmInspection* i, uint32_t moving, uint32_t target, BmPieceMove* out, size_t cap) {
+  if (!i) return 0;
+  return guard(size_t{0}, [&] {
+    const std::vector<bmapp::FitPose> fits = i->inspection->fits(moving, target);
+    for (size_t k = 0; out && k < fits.size() && k < cap; ++k)
+      out[k] = BmPieceMove{moving, from_mat3(fits[k].pose.rotation), from_vec3(fits[k].pose.position)};
+    return fits.size();
+  });
+}
+
 BmChange bm_session_seat_pieces(BmSession* s, const BmPieceMove* moves, size_t n, uint64_t generation, uint64_t version) {
   return change(s, [&] {
     bmapp::PieceMoves out;

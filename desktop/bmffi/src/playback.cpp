@@ -159,6 +159,12 @@ size_t bm_viewport_build_order(BmViewport* v, uint32_t* out, size_t cap) {
   return bmffi::guard<size_t>(0, [&] { return copySlice(v->v->buildOrder(), out, cap); });
 }
 
+size_t bm_viewport_marquee(BmViewport* v, double x0, double y0, double x1, double y1, bool touching, uint32_t* out,
+                           size_t cap) {
+  if (!v) return 0;
+  return bmffi::guard<size_t>(0, [&] { return copySlice(v->v->marquee(x0, y0, x1, y1, touching), out, cap); });
+}
+
 BmTimeline* bm_viewport_build_timeline(const BmViewport* v) {
   if (!v) return nullptr;
   return bmffi::handle<BmTimeline>([&] { return new BmTimeline{v->v->buildTimeline()}; });

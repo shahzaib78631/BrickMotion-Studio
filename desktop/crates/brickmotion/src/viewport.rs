@@ -33,7 +33,10 @@ pub enum DragMode {
 #[derive(Clone, Copy, Debug, Default)]
 pub struct Gesture {
     pub primary_drag: Vec2,
-    pub secondary_or_middle_drag: Vec2,
+    /// Right-drag orbits (⇧ or ⌥ pans), as in the Swift app.
+    pub secondary_drag: Vec2,
+    /// Middle-drag pans.
+    pub middle_drag: Vec2,
     pub scroll: Vec2,
     /// Trackpad pinch this frame: 0 for none, 0.1 for 10% closer.
     pub pinch: f32,
@@ -59,8 +62,12 @@ pub fn ops_for(g: &Gesture) -> Vec<ViewOp> {
             (DragMode::Zoom, false) => ViewOp::ZoomToward(1.01f64.powf(-dy), ox, oy),
         });
     }
-    if g.secondary_or_middle_drag != Vec2::ZERO {
-        ops.push(ViewOp::Pan(g.secondary_or_middle_drag.x as f64, g.secondary_or_middle_drag.y as f64));
+    if g.secondary_drag != Vec2::ZERO {
+        let (dx, dy) = (g.secondary_drag.x as f64, g.secondary_drag.y as f64);
+        ops.push(if g.modifiers.shift || g.modifiers.alt { ViewOp::Pan(dx, dy) } else { ViewOp::Orbit(dx, dy) });
+    }
+    if g.middle_drag != Vec2::ZERO {
+        ops.push(ViewOp::Pan(g.middle_drag.x as f64, g.middle_drag.y as f64));
     }
     if g.scroll.y != 0.0 || g.pinch != 0.0 {
         let factor = 1.0015f64.powf(g.scroll.y as f64) * (1.0 + g.pinch as f64);
@@ -161,6 +168,14 @@ pub struct ViewportWidget {
     drag: Option<GizmoDrag>,
     /// A pointer press on a piece waiting to cross the drag threshold before starting live snap-move.
     pending_piece_drag: Option<(Pos2, u32, Vec<u32>)>,
+    /// A Select-tool press on empty space, waiting to cross the drag threshold to become a marquee.
+    pending_marquee: Option<Pos2>,
+    /// The Scale drag's stalk on screen when it began: centre and the grabbed tip.
+    scale_stalk: Option<(bm::Vec2, bm::Vec2)>,
+    /// The Scale chip's text while dragging.
+    scale_label: Option<String>,
+    /// The marquee being dragged: where it started and where the pointer is.
+    marquee: Option<(Pos2, Pos2)>,
     /// A pointer press on a waiting piece in Animate mode waiting to cross the drag threshold.
     pending_waiting_drag: Option<(Pos2, u32)>,
     /// Piece double-clicked in the viewport this frame (consumed by chrome to open flight path / submodel).
@@ -184,6 +199,11 @@ pub struct ViewportWidget {
 }
 
 impl ViewportWidget {
+    /// The Scale chip's text while a scale drag is under way.
+    pub fn scale_readout(&self) -> Option<String> {
+        self.scale_label.clone()
+    }
+
     /// The last frame the viewport drew (empty before the first).
     pub fn last_frame(&self) -> &bm::Frame {
         &self.frame
@@ -313,6 +333,7 @@ impl ViewportWidget {
                 // When Smart Joints has an active joint ring open, it replaces the generic Rotate gizmo.
                 Tool::Rotate if !self.suppress_rotate_gizmo => Some(GizmoKind::Rotate),
                 Tool::Rotate => None,
+                Tool::Scale => Some(GizmoKind::Scale),
                 Tool::Select => None,
             }
         };
@@ -439,12 +460,24 @@ impl ViewportWidget {
                                         changed = true;
                                     }
                                 }
+                                GizmoKind::Scale => {
+                                    let (o, tip) = self.scale_stalk.unwrap_or_default();
+                                    let f = gizmo::scale_factor(o, tip, d.handle, d.start, curr, modifiers.shift);
+                                    if let Some(ratio) = d.step_scale(f) {
+                                        let k = |h| if d.handle == Handle::View || d.handle == h { ratio } else { 1.0 };
+                                        let factor = bm::Vec3::new(k(Handle::X), k(Handle::Y), k(Handle::Z));
+                                        doc.session().scale(&d.pieces, factor, d.axes, d.origin, true);
+                                        changed = true;
+                                    }
+                                    self.scale_label = Some(gizmo::format_scale(d.handle, d.scaled()));
+                                }
                             }
                         }
                     }
                 } else {
                     self.drag = None;
                     self.auto_drag = None;
+                    self.scale_label = None;
                     doc.session().end_gesture();
                 }
             } else if primary_pressed && !gizmo_consumed_primary
@@ -453,11 +486,18 @@ impl ViewportWidget {
                 && let Some(shape) = &self.gizmo
             {
                 let pt = to_bm(pos);
-                let hit = shape.hit(pt, 8.0);
+                let hit = if kind == GizmoKind::Scale { gizmo::scale_hit(shape, pt) } else { shape.hit(pt, 8.0) };
                 if hit != Handle::None {
                     gizmo_consumed_primary = true;
+                    if kind == GizmoKind::Scale {
+                        let o = shape.lines.first().map(|l| l.0).unwrap_or_default();
+                        let tip = shape.lines.iter().find(|l| l.2 == hit).map_or(o, |l| l.1);
+                        self.scale_stalk = Some((o, tip));
+                    }
                     // Auto Key: key the chosen object instead; a selection it cannot key does nothing.
+                    // Scaling is not keyed: with Auto Key on it does nothing.
                     let auto = match self.auto_key {
+                        Some(_) if kind == GizmoKind::Scale => None,
                         Some(ak) => bm::keys::auto_key_target(doc.session(), &sel, true, ak.key_submodel)
                             .map(|(piece, submodel)| Some((piece, submodel, ak.frame))),
                         None => Some(None),
@@ -609,7 +649,7 @@ impl ViewportWidget {
                     let allow = match edit.tool {
                         Tool::Move => true,
                         Tool::Select => sel.contains(&piece),
-                        Tool::Rotate => false,
+                        Tool::Rotate | Tool::Scale => false,
                     };
                     if allow {
                         let pieces = if sel.contains(&piece) {
@@ -621,6 +661,67 @@ impl ViewportWidget {
                     }
                 }
             }
+        }
+
+        // Marquee: with the Select tool, a drag that starts on empty space draws a box and selects
+        // the pieces wholly inside it (⇧ adds). A press that never moves stays a click.
+        let marquee_allowed = !playing
+            && !placing
+            && self.waiting_drag.is_none()
+            && self.drag.is_none()
+            && self.nav_mode.is_none()
+            && self.auto_key.is_none()
+            && edit.tool == Tool::Select
+            && !gizmo_consumed_primary;
+        if !marquee_allowed {
+            self.pending_marquee = None;
+            self.marquee = None;
+        } else if let Some(start) = self.pending_marquee {
+            if primary_down {
+                gizmo_consumed_primary = true;
+                if let Some(curr) = latest_pos
+                    && (self.marquee.is_some() || curr.distance(start) > 3.5)
+                {
+                    self.marquee = Some((start, curr));
+                    changed = true;
+                }
+            } else {
+                self.pending_marquee = None;
+                if let Some((a, _)) = self.marquee.take() {
+                    gizmo_consumed_primary = true;
+                    let b = latest_pos.unwrap_or(a);
+                    let found = doc.viewport().map(|vp| vp.marquee(to_bm(a), to_bm(b), false)).unwrap_or_default();
+                    let mut pieces: Vec<u32> = Vec::new();
+                    let mut seen = std::collections::HashSet::new();
+                    for p in found {
+                        for q in pick_targets(doc.session(), p, edit.pick_scope, false) {
+                            if seen.insert(q) {
+                                pieces.push(q);
+                            }
+                        }
+                    }
+                    // The release carries the modifiers held as the box was let go.
+                    let shift = ui.input(|i| {
+                        i.events.iter().rev().find_map(|ev| match ev {
+                            egui::Event::PointerButton { button: egui::PointerButton::Primary, pressed: false, modifiers, .. } => Some(modifiers.shift),
+                            _ => None,
+                        })
+                    });
+                    let mode = if shift.unwrap_or(modifiers.shift) { bm::SelectMode::Add } else { bm::SelectMode::Replace };
+                    doc.session().select(&pieces, mode);
+                    changed = true;
+                }
+            }
+        } else if primary_pressed
+            && !modifiers.alt
+            && !modifiers.command
+            && !modifiers.mac_cmd
+            && let Some(pos) = latest_pos.filter(|p| rect.contains(*p))
+            && (resp.hovered() || resp.is_pointer_button_down_on())
+            && let Some(vp) = doc.viewport()
+            && vp.pick(to_bm(pos).x, to_bm(pos).y).is_none()
+        {
+            self.pending_marquee = Some(pos);
         }
 
         // Right-click: remember what was under the pointer; the chrome draws the menu for it. A
@@ -652,8 +753,8 @@ impl ViewportWidget {
         } else {
             Vec2::ZERO
         };
-        let other_drag = resp.dragged_by(egui::PointerButton::Secondary) || resp.dragged_by(egui::PointerButton::Middle);
-        let secondary_or_middle_drag = if other_drag { resp.drag_delta() } else { Vec2::ZERO };
+        let secondary_drag = if resp.dragged_by(egui::PointerButton::Secondary) { resp.drag_delta() } else { Vec2::ZERO };
+        let middle_drag = if resp.dragged_by(egui::PointerButton::Middle) { resp.drag_delta() } else { Vec2::ZERO };
         let click_at = if !gizmo_consumed_primary && resp.clicked() {
             resp.interact_pointer_pos().map(local)
         } else {
@@ -685,7 +786,8 @@ impl ViewportWidget {
                 .unwrap_or(i.modifiers);
             Gesture {
                 primary_drag,
-                secondary_or_middle_drag,
+                secondary_drag,
+                middle_drag,
                 scroll: if hovered { i.smooth_scroll_delta() } else { Vec2::ZERO },
                 pinch: if hovered { i.zoom_delta() - 1.0 } else { 0.0 },
                 click: click_at.map(|p| (p, click_mods)),
@@ -758,6 +860,11 @@ impl ViewportWidget {
             ui.painter().image(t.id(), rect, uv, crate::theme::NO_TINT);
         }
 
+        if let Some((a, b)) = self.marquee {
+            let r = Rect::from_two_pos(a, b).intersect(rect);
+            ui.painter().rect(r, 0.0, theme.accent_a(30), egui::Stroke::new(1.0, theme.accent), egui::StrokeKind::Inside);
+        }
+
         // Refresh and paint the gizmo after any camera/selection change this frame.
         let sel_now = doc.session().selection();
         if let Some(kind) = gizmo_kind.filter(|_| !playing && !sel_now.is_empty()) {
@@ -774,16 +881,20 @@ impl ViewportWidget {
             let shape = GizmoShape::new(&cam, view_pt, origin, axes, kind);
             self.hovered = hover_pos
                 .filter(|p| rect.contains(*p))
-                .map(|p| shape.hit(to_bm(p), 8.0))
+                .map(|p| if kind == GizmoKind::Scale { gizmo::scale_hit(&shape, to_bm(p)) } else { shape.hit(to_bm(p), 8.0) })
                 .unwrap_or(Handle::None);
             let active = self.drag.as_ref().map(|d| d.handle).unwrap_or(Handle::None);
-            gizmo::paint(ui.painter(), theme, rect, &shape, active, self.hovered);
+            if kind == GizmoKind::Scale {
+                gizmo::paint_scale(ui.painter(), theme, rect, &shape, active, self.hovered);
+            } else {
+                gizmo::paint(ui.painter(), theme, rect, &shape, active, self.hovered);
+            }
             if let (Some(d), Some(ptr)) = (&self.drag, latest_pos) {
-                let label = match kind {
-                    GizmoKind::Move => gizmo::format_move(d.moved()),
-                    GizmoKind::Rotate => gizmo::format_rotate(d.turned()),
-                };
-                gizmo::paint_readout(ui.painter(), theme, ptr, &label);
+                match kind {
+                    GizmoKind::Move => gizmo::paint_readout(ui.painter(), theme, ptr, &gizmo::format_move(d.moved())),
+                    GizmoKind::Rotate => gizmo::paint_readout(ui.painter(), theme, ptr, &gizmo::format_rotate(d.turned())),
+                    GizmoKind::Scale => gizmo::paint_chip(ui.painter(), theme, rect, &gizmo::format_scale(d.handle, d.scaled())),
+                }
             }
             self.gizmo = Some(shape);
         } else {
@@ -808,7 +919,11 @@ mod tests {
         assert_eq!(ops_for(&d), vec![ViewOp::Orbit(10.0, -4.0)]);
         let d = Gesture { modifiers: Modifiers::ALT, ..d };
         assert_eq!(ops_for(&d), vec![ViewOp::Pan(10.0, -4.0)]);
-        let d = Gesture { secondary_or_middle_drag: vec2(3.0, 2.0), ..g() };
+        let d = Gesture { secondary_drag: vec2(3.0, 2.0), ..g() };
+        assert_eq!(ops_for(&d), vec![ViewOp::Orbit(3.0, 2.0)], "right-drag orbits");
+        let d = Gesture { modifiers: Modifiers::SHIFT, ..d };
+        assert_eq!(ops_for(&d), vec![ViewOp::Pan(3.0, 2.0)], "⇧ right-drag pans");
+        let d = Gesture { middle_drag: vec2(3.0, 2.0), ..g() };
         assert_eq!(ops_for(&d), vec![ViewOp::Pan(3.0, 2.0)]);
     }
 

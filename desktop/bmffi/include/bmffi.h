@@ -60,6 +60,10 @@ BMFFI_API void bm_viewport_set_background(BmViewport* v, double r, double g, dou
 BMFFI_API void bm_viewport_set_orthographic(BmViewport* v, bool on);
 /// BM_NO_PIECE on empty space.
 BMFFI_API uint32_t bm_viewport_pick(BmViewport* v, double x_pt, double y_pt);
+/// The shown pieces inside the rectangle (points from the top left, either corner first);
+/// `touching` also takes pieces it only overlaps. Writes up to `cap`, returns the total.
+BMFFI_API size_t bm_viewport_marquee(BmViewport* v, double x0, double y0, double x1, double y1, bool touching,
+                                     uint32_t* out, size_t cap);
 BMFFI_API void bm_viewport_frame_selection(BmViewport* v);
 
 // ---- Documents ----
@@ -954,6 +958,11 @@ BMFFI_API size_t bm_fitting_parts_len(const BmFittingParts* f);
 BMFFI_API const char* bm_fitting_parts_name(const BmFittingParts* f, size_t i);
 BMFFI_API BmVec3 bm_fitting_parts_contact(const BmFittingParts* f, size_t i);
 BMFFI_API void bm_fitting_parts_free(BmFittingParts* f);
+// Where `piece` sits in the open model: rotation (with any scale) and position.
+BMFFI_API BmPieceMove bm_session_pose_of(const BmSession* s, uint32_t piece);
+// Fit Together: poses that seat `moving` onto `target`, best first. Writes up to `cap`; returns
+// how many there are.
+BMFFI_API size_t bm_inspection_fits(BmInspection* i, uint32_t moving, uint32_t target, BmPieceMove* out, size_t cap);
 
 BMFFI_API BmChange bm_session_seat_pieces(BmSession* s, const BmPieceMove* moves, size_t n, uint64_t generation,
                                           uint64_t version);

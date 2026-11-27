@@ -9,6 +9,7 @@ pub enum Tool {
     Select,
     Move,
     Rotate,
+    Scale,
 }
 
 /// Editing state owned by the app and lent to the viewport and chrome each frame.

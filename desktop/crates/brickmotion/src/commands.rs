@@ -16,6 +16,8 @@ pub enum When {
     SeveralPieces,
     /// Two or more pieces selected.
     SeveralSelected,
+    /// Exactly two pieces selected.
+    TwoSelected,
     /// Something is selected.
     Selection,
     /// Exactly one piece is selected.
@@ -174,6 +176,7 @@ pub fn enabled(c: &Command, ctx: &Ctx) -> bool {
         When::Pieces => ctx.pieces > 0,
         When::SeveralPieces => ctx.pieces > 1,
         When::SeveralSelected => ctx.selected > 1,
+        When::TwoSelected => ctx.selected == 2,
         When::Selection => ctx.selected > 0,
         When::OnePiece => ctx.selected == 1,
         When::Step => ctx.has_document && ctx.step.is_some_and(|i| i < ctx.steps),
@@ -197,6 +200,7 @@ pub fn why_disabled(c: &Command, ctx: &Ctx) -> Option<&'static str> {
         When::Pieces => "Needs a model with pieces",
         When::SeveralPieces => "Needs at least two pieces",
         When::SeveralSelected => "Select two or more pieces",
+        When::TwoSelected => "Select two pieces",
         When::Selection => "Needs a selection",
         When::OnePiece => "Select one piece first",
         When::Step => "Choose a step first",
@@ -287,6 +291,7 @@ static REGISTRY: &[Command] = &[
     Command { id: "model.rotate", title: "Turn", icon: Icon::Rotate, keys: Some("R"), tip: "Turn the selection 90° clockwise around its centre.", workspace: Workspace::Build, tab: "Model", group: "Modify", when: When::Selection, menu: Menu::Edit },
     Command { id: "model.duplicate", title: "Duplicate", icon: Icon::Copy, keys: Some("⌘D"), tip: "Copy the selection and offset the copy by one stud.", workspace: Workspace::Build, tab: "Model", group: "Modify", when: When::Selection, menu: Menu::Edit },
     Command { id: "model.make_submodel", title: "Make Submodel", icon: Icon::Group, keys: Some("⌥⌘G"), tip: "Turn the selected pieces into a submodel used once, in their place.", workspace: Workspace::Build, tab: "Model", group: "Arrange", when: When::SeveralSelected, menu: Menu::Model },
+    Command { id: "model.fit_together", title: "Fit Together", icon: Icon::Magnet, keys: None, tip: "Seat the second piece you chose on a free connector of the first.", workspace: Workspace::Build, tab: "Model", group: "Arrange", when: When::TwoSelected, menu: Menu::Model },
     Command { id: "model.extract", title: "Extract", icon: Icon::Extract, keys: None, tip: "Replace the selected submodel with its own pieces.", workspace: Workspace::Build, tab: "Model", group: "Arrange", when: When::Selection, menu: Menu::Model },
     Command { id: "model.to_step", title: "To Step", icon: Icon::Step, keys: None, tip: "Gather the selected pieces into the chosen build step.", workspace: Workspace::Build, tab: "Model", group: "Arrange", when: When::StepSelection, menu: Menu::Steps },
     Command { id: "inspect.model_checks", title: "Model Checks", icon: Icon::Checks, keys: None, tip: "Check the model for overlaps, unsupported parts, tipping groups and missing definitions.", workspace: Workspace::Build, tab: "Inspect", group: "Checks", when: When::Document, menu: Menu::Model },
@@ -341,6 +346,7 @@ static REGISTRY: &[Command] = &[
     Command { id: "view.record", title: "Record Viewport", icon: Icon::Vid, keys: Some("⌥⇧⌘R"), tip: "Record what the viewport shows as a movie.", workspace: Workspace::Animate, tab: "Output", group: "View", when: When::Document, menu: Menu::View },
     Command { id: "view.palette", title: "Command Palette…", icon: Icon::Search, keys: Some("⌘K"), tip: "Find any command by name.", workspace: Workspace::Build, tab: "", group: "View", when: When::Always, menu: Menu::Help },
     Command { id: "tool.select", title: "Select Tool", icon: Icon::Cursor, keys: Some("V"), tip: "Pick pieces in the viewport.", workspace: Workspace::Build, tab: "", group: "Tools", when: When::Document, menu: Menu::None },
+    Command { id: "model.scale_tool", title: "Scale Tool", icon: Icon::Scale, keys: Some("S"), tip: "Stretch the selection with the square handles, or evenly with the centre disc. Scaled parts no longer fit real ones.", workspace: Workspace::Build, tab: "", group: "Tools", when: When::Document, menu: Menu::None },
     Command { id: "model.rotate_tool", title: "Rotate Tool", icon: Icon::Rotate, keys: None, tip: "Turn the selection interactively with the rotate rings.", workspace: Workspace::Build, tab: "", group: "Tools", when: When::Document, menu: Menu::None },
     Command { id: "model.rotate_back", title: "Turn Back", icon: Icon::Rotate, keys: Some("⇧R"), tip: "Turn the selection 90° anticlockwise around its centre.", workspace: Workspace::Build, tab: "", group: "Modify", when: When::Selection, menu: Menu::Edit },
     Command { id: "edit.clone", title: "Clone", icon: Icon::Copy, keys: Some("C"), tip: "Duplicate the selection in place.", workspace: Workspace::Build, tab: "", group: "Edit", when: When::Selection, menu: Menu::Edit },

@@ -145,6 +145,7 @@ fn tool_groups(ui: &mut Ui, app: &mut BrickMotionApp) {
                         let on = enabled(c, &ctx);
                         let active = (c.id == "model.move" && ctx.tool == crate::Tool::Move)
                             || (c.id == "model.rotate_tool" && ctx.tool == crate::Tool::Rotate)
+                            || (c.id == "model.scale_tool" && ctx.tool == crate::Tool::Scale)
                             || (c.id == "model.look" && app.look.open)
                             || (c.id == "view.orthographic" && ctx.orthographic)
                             || (c.id == "view.look" && app.look.open)
