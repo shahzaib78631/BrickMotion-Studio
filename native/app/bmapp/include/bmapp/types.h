@@ -135,6 +135,10 @@ struct RenderLook {
   bool worldGiOcclusion = true; ///< Studio: baked studio visibility
   bool lightsFollowCamera = false;
   int pathSamples = 64;         ///< path tracing: samples a pixel, 8–1024
+  /// How parts are rounded for display (bmr::Rounding), all on by default.
+  bool smoothCurves = true;     ///< 48-sided studs and curves
+  bool roundedEdges = true;     ///< shading fillets on convex edges
+  bool softStudRoots = true;    ///< a soft base where a stud meets the deck
 };
 
 /// A piece and where it goes, in the world.

@@ -9,6 +9,7 @@
 #include "bm/plan/timeline.h"
 #include "bmr/camera.h"
 #include "bmr/image.h"
+#include "bmr/render_mesh.h"
 #include "bmr/scene.h"
 
 namespace bmr {
@@ -84,7 +85,14 @@ class Renderer {
   /// nullptr when drawing is not possible here (see bmr::gpuAvailable). `low` is a part cache
   /// with FlattenOptions::lowResPrimitives set. The model and both caches must outlive the
   /// renderer, which only reads them.
-  static std::unique_ptr<Renderer> create(const bm::Model& model, bm::ldraw::PartCache& full, bm::ldraw::PartCache& low);
+  /// `rounding`: how parts are rounded for display (all on by default); fixed for its life.
+  static std::unique_ptr<Renderer> create(const bm::Model& model, bm::ldraw::PartCache& full, bm::ldraw::PartCache& low,
+                                          Rounding rounding = {});
+  /// What it draws parts with now.
+  Rounding rounding() const;
+  /// Redraws every part with this rounding (all its meshes are made again); selection, hiding
+  /// and the frame shown are kept. Nothing happens when it is the current one.
+  void setRounding(Rounding rounding);
   ~Renderer();
   Renderer(const Renderer&) = delete;
   Renderer& operator=(const Renderer&) = delete;

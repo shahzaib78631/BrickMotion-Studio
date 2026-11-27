@@ -101,7 +101,7 @@ int buildVideo(const std::vector<std::string_view>& args) {
     if (duration * fps >= std::numeric_limits<int>::max()) throw std::runtime_error("The build is too long to encode.");
     const int frames = std::max(2, static_cast<int>(std::lround(duration * fps)));
 
-    auto renderer = bmr::Renderer::create(model, full, low);
+    auto renderer = bmr::Renderer::create(model, full, low, shot.rounding);
     if (!renderer) throw std::runtime_error("Metal could not start the video renderer.");
     renderer->resize(shot.width, shot.height);
     const bm::Box bounds = renderer->scene().bounds;

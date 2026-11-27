@@ -31,6 +31,19 @@ fn look_round_trips_with_one_undo_step() {
 }
 
 #[test]
+fn rounding_switches_round_trip_and_reach_the_still_arguments() {
+    let s = heli();
+    let mut look = s.render_look();
+    assert!(look.smooth_curves && look.rounded_edges && look.soft_stud_roots, "all on by default");
+    look.rounded_edges = false;
+    assert_eq!(s.set_render_look(&look).refused, None);
+    assert_eq!(s.render_look(), look);
+    let args = export::still_arguments(&StillChoice::default(), &look);
+    assert!(args.iter().any(|a| a == "--no-rounded-edges"), "{args:?}");
+    assert!(!args.iter().any(|a| a == "--no-smooth-curves"), "{args:?}");
+}
+
+#[test]
 fn scenes_are_listed() {
     let scenes = export::scenes();
     assert_eq!(scenes.len(), 34);

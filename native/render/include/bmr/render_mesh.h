@@ -57,11 +57,19 @@ RenderMesh boxMesh(const bm::Box& box);
 /// shadow map is drawn from; never drawn to be seen.
 enum class Detail : uint8_t { Full = 0, Low = 1, Box = 2, Shadow = 3 };
 
+/// How parts are rounded for display (never for planning or collision). All on by default.
+struct Rounding {
+  bool smoothCurves = true;   ///< studs and other curves from the 48-sided primitives (p/48) where they exist
+  bool roundedEdges = true;   ///< roundRenderEdges: narrow shading fillets on convex edges
+  bool softStudRoots = true;  ///< softenStudRoots: a soft base where a stud meets the deck
+  bool operator==(const Rounding&) const = default;
+};
+
 /// The render meshes of the parts of one model, built on first use. Thread-safe.
 class MeshLibrary {
  public:
   /// `low` is a cache with FlattenOptions::lowResPrimitives set. All three must outlive this.
-  MeshLibrary(const bm::Model& model, bm::ldraw::PartCache& full, bm::ldraw::PartCache& low);
+  MeshLibrary(const bm::Model& model, bm::ldraw::PartCache& full, bm::ldraw::PartCache& low, Rounding rounding = {});
   ~MeshLibrary();
   MeshLibrary(const MeshLibrary&) = delete;
   MeshLibrary& operator=(const MeshLibrary&) = delete;

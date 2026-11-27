@@ -43,6 +43,9 @@ bmapp::RenderLook toLook(const BmRenderLook& l) {
   out.worldGiOcclusion = l.world_gi_occlusion;
   out.lightsFollowCamera = l.lights_follow_camera;
   out.pathSamples = l.path_samples;
+  out.smoothCurves = l.smooth_curves;
+  out.roundedEdges = l.rounded_edges;
+  out.softStudRoots = l.soft_stud_roots;
   return out;
 }
 
@@ -100,7 +103,8 @@ BmRenderLook bm_session_render_look(const BmSession* s) {
   if (s) bmffi::guardVoid([&] { cached = s->s->renderLook(); });
   return BmRenderLook{cached.scene.c_str(), static_cast<int32_t>(cached.shading), cached.edges, cached.shadows,
                       cached.ambientOcclusion, cached.floor, cached.raytracedGlass, cached.worldGiOcclusion,
-                      cached.lightsFollowCamera, cached.pathSamples};
+                      cached.lightsFollowCamera, cached.pathSamples, cached.smoothCurves, cached.roundedEdges,
+                      cached.softStudRoots};
 }
 
 BmChange bm_session_set_render_look(BmSession* s, BmRenderLook look) {

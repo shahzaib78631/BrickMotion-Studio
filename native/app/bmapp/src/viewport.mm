@@ -446,7 +446,8 @@ struct Viewport::Impl {
     pinned = session->shared();
     generation = pinned->generation;
     ok = false;
-    if (pinned->model && bmr::gpuAvailable()) renderer = bmr::Renderer::create(*pinned->model, *pinned->full, *pinned->low);
+    if (pinned->model && bmr::gpuAvailable())
+      renderer = bmr::Renderer::create(*pinned->model, *pinned->full, *pinned->low, roundingOf(renderLookOf(session->impl())));
     ok = renderer != nullptr;
     if (ok && width > 0 && height > 0) renderer->resize(width, height);
     seen = session->version();
@@ -462,9 +463,14 @@ struct Viewport::Impl {
     dirty = true;
   }
 
+  static bmr::Rounding roundingOf(const RenderLook& look) {
+    return {look.smoothCurves, look.roundedEdges, look.softStudRoots};
+  }
+
   void applyLook() {
     look = renderLookOf(session->impl());
     lookSeen = session->version();
+    if (renderer) renderer->setRounding(roundingOf(look));  // a no-op unless it changed
     options.edges = look.edges && preferences.edges;
     options.floor = look.floor && preferences.floor;
     options.shadows = look.shadows && preferences.shadows;

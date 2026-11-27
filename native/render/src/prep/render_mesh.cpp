@@ -125,17 +125,21 @@ struct MeshLibrary::State {
   const bm::Model* model;
   bm::ldraw::PartCache& full;
   bm::ldraw::PartCache& low;
-  std::unique_ptr<bm::ldraw::PartCache> rounded; // high-resolution display primitives, independent of planning
+  std::unique_ptr<bm::ldraw::PartCache> rounded; // high-resolution display primitives, independent of planning; null: `full`
+  Rounding rounding;
   std::unique_ptr<bm::ldraw::PartCache> bare;  // as `low`, without studs: for Detail::Shadow
   std::mutex mutex;
   std::map<std::pair<std::string, int>, std::shared_ptr<const RenderMesh>> made;
 };
 
-MeshLibrary::MeshLibrary(const bm::Model& model, bm::ldraw::PartCache& full, bm::ldraw::PartCache& low) : state_(new State{&model, full, low, nullptr, nullptr, {}, {}}) {
-  auto display = full.options();
-  display.hiResPrimitives = true;
-  display.lowResPrimitives = false;
-  state_->rounded = std::make_unique<bm::ldraw::PartCache>(full.library(), full.directory(), display);
+MeshLibrary::MeshLibrary(const bm::Model& model, bm::ldraw::PartCache& full, bm::ldraw::PartCache& low, Rounding rounding)
+    : state_(new State{&model, full, low, nullptr, rounding, nullptr, {}, {}}) {
+  if (rounding.smoothCurves) {
+    auto display = full.options();
+    display.hiResPrimitives = true;
+    display.lowResPrimitives = false;
+    state_->rounded = std::make_unique<bm::ldraw::PartCache>(full.library(), full.directory(), display);
+  }
   bm::ldraw::FlattenOptions bare = low.options();
   bare.noStuds = true;
   state_->bare = std::make_unique<bm::ldraw::PartCache>(low.library(), low.directory(), bare);
@@ -160,9 +164,9 @@ std::shared_ptr<const RenderMesh> MeshLibrary::get(const std::string& part, Deta
   // Built outside the lock: two threads may build the same mesh once each, and the first is kept.
   std::shared_ptr<const RenderMesh> mesh;
   if (detail == Detail::Full) {
-    RenderMesh rounded = buildRenderMesh(*s.model->mesh(part, *s.rounded), s.model->library().colors());
-    roundRenderEdges(rounded, kRoundedEdgeWidth);
-    softenStudRoots(rounded, kStudRootWidth);
+    RenderMesh rounded = buildRenderMesh(*s.model->mesh(part, s.rounded ? *s.rounded : s.full), s.model->library().colors());
+    if (s.rounding.roundedEdges) roundRenderEdges(rounded, kRoundedEdgeWidth);
+    if (s.rounding.softStudRoots) softenStudRoots(rounded, kStudRootWidth);
     mesh = std::make_shared<const RenderMesh>(std::move(rounded));
   } else {
     const std::shared_ptr<const RenderMesh> whole = get(part, Detail::Full);
@@ -178,8 +182,8 @@ std::shared_ptr<const RenderMesh> MeshLibrary::get(const std::string& part, Deta
       mesh = whole;
       if (!whole->empty() && !s.model->library().isInline(part)) {
         RenderMesh coarse = buildRenderMesh(*s.low.get(part), s.model->library().colors());
-        roundRenderEdges(coarse, kRoundedEdgeWidth);
-        softenStudRoots(coarse, kStudRootWidth);
+        if (s.rounding.roundedEdges) roundRenderEdges(coarse, kRoundedEdgeWidth);
+        if (s.rounding.softStudRoots) softenStudRoots(coarse, kStudRootWidth);
         if (!coarse.empty() && coarse.indices.size() < whole->indices.size()) mesh = std::make_shared<const RenderMesh>(std::move(coarse));
       }
     }

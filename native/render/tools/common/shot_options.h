@@ -9,6 +9,7 @@
 #include "bm/math.h"
 #include "bm/plan/timeline.h"
 #include "bmr/camera.h"
+#include "bmr/render_mesh.h"
 
 namespace bmtools {
 
@@ -26,6 +27,8 @@ struct ShotOptions {
   /// --correct: pieces drawn a little off what holds them are set in place before anything is
   /// drawn or planned (bm::plan::Options::correctPlacements), as bm plan --correct does.
   bool correct = false;
+  /// --no-smooth-curves, --no-rounded-edges, --no-soft-stud-roots: the display rounding turned off.
+  bmr::Rounding rounding;
   /// --flight auto|web|arc: the flight's shape (bm::plan::Style::shape).
   bm::plan::FlightShape flight = bm::plan::FlightShape::Auto;
   /// --planner native|legacy: bm's own planner (the default) or the web app's Standard one.

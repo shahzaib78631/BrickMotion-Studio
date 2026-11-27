@@ -169,3 +169,31 @@ TEST_CASE("rounded shading stays within a narrow edge band and preserves surface
   REQUIRE(std::abs(area - 2720) < 0.01);
   REQUIRE(bent > 0); REQUIRE(flat > 0);
 }
+
+TEST_CASE("each rounding switch changes a brick's mesh, and all on is the default", "[mesh][data]") {
+  const char* dir = std::getenv("BM_LDRAW_DIR");
+  if (!dir) SKIP("BM_LDRAW_DIR is not set");
+  const ldraw::Library lib(dir);
+  const fs::path file = fs::temp_directory_path() / ("bmr_rounding_test_" + std::to_string(::getpid()) + ".ldr");
+  { std::ofstream out(file); out << "1 4 0 0 0 1 0 0 0 1 0 0 0 1 3001.dat\n"; }
+  const Model model = io::load(file, lib);
+  fs::remove(file);
+  const fs::path cacheDir = fs::temp_directory_path() / "bmr_mesh_test_cache";
+  ldraw::FlattenOptions lowOptions;
+  lowOptions.lowResPrimitives = true;
+  ldraw::PartCache full(lib, cacheDir), low(lib, cacheDir, lowOptions);
+  const auto meshOf = [&](Rounding r) {
+    MeshLibrary meshes(model, full, low, r);
+    const auto m = meshes.get("3001.dat", Detail::Full);
+    return std::make_pair(m->vertices.size(), m->indices.size());
+  };
+  const auto standard = meshOf({});
+  MeshLibrary defaults(model, full, low);
+  const auto plain = defaults.get("3001.dat", Detail::Full);
+  CHECK(std::make_pair(plain->vertices.size(), plain->indices.size()) == standard);  // all on is today's mesh
+  CHECK(meshOf({.smoothCurves = false}).second < standard.second);   // 16-sided studs: fewer triangles
+  CHECK(meshOf({.roundedEdges = false}).second < standard.second);   // no edge fillets
+  CHECK(meshOf({.softStudRoots = false}) != standard);               // the stud base ring stays
+  const auto bare = meshOf({false, false, false});
+  CHECK(bare.second < meshOf({.smoothCurves = false}).second);
+}

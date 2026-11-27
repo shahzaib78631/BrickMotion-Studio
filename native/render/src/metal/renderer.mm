@@ -19,7 +19,21 @@ Renderer::~Renderer() {
     for (int i = 0; i < 3; i++) dispatch_semaphore_signal(impl_->inFlight);
 }
 
-std::unique_ptr<Renderer> Renderer::create(const bm::Model& model, bm::ldraw::PartCache& full, bm::ldraw::PartCache& low) {
+Rounding Renderer::rounding() const { return impl_->rounding; }
+
+void Renderer::setRounding(Rounding rounding) {
+  Impl& impl = *impl_;
+  if (rounding == impl.rounding) return;
+  impl.rounding = rounding;
+  impl.meshes = std::make_unique<MeshLibrary>(*impl.model, *impl.full, *impl.low, rounding);
+  impl.gpuMeshes.clear();
+  impl.ptScene.reset();  // its parts were made from the old meshes; made again when next needed
+  impl.ptInitTried = false;
+  impl.groupsChanged(true);
+}
+
+std::unique_ptr<Renderer> Renderer::create(const bm::Model& model, bm::ldraw::PartCache& full, bm::ldraw::PartCache& low,
+                                           Rounding rounding) {
   Device* device = sharedDevice();
   if (!device) return nullptr;
   @autoreleasepool {
@@ -34,7 +48,9 @@ std::unique_ptr<Renderer> Renderer::create(const bm::Model& model, bm::ldraw::Pa
       return nullptr;
     }
     impl.full = &full;
-    impl.meshes = std::make_unique<MeshLibrary>(model, full, low);
+    impl.rounding = rounding;
+    impl.low = &low;
+    impl.meshes = std::make_unique<MeshLibrary>(model, full, low, rounding);
     impl.scene = buildScene(model, full);
     impl.inFlight = dispatch_semaphore_create(3);
     impl.makeGroups(0);

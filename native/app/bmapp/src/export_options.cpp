@@ -235,6 +235,9 @@ StringList stillArguments(const StillChoice& choice, const RenderLook& look) {
                  std::to_string(static_cast<int>(choice.quality)), "--no-denoise"};
   if (choice.viewportAngle && choice.angles.present) appendAngles(out, choice.angles, false);
   out.push_back(look.lightsFollowCamera ? "--lights-follow" : "--lights-fixed");
+  if (!look.smoothCurves) out.push_back("--no-smooth-curves");
+  if (!look.roundedEdges) out.push_back("--no-rounded-edges");
+  if (!look.softStudRoots) out.push_back("--no-soft-stud-roots");
   for (const auto& scene : Session::scenes()) {
     if (scene.id != look.scene) continue;
     auto byte = [](double v) { return std::to_string(static_cast<int>(std::lround(v * 255))); };

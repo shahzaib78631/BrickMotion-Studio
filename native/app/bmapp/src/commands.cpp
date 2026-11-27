@@ -1888,6 +1888,9 @@ RenderLook renderLookOf(const Session::Impl& s) {
   flag("raytracedGlass", look.raytracedGlass);
   flag("worldGiOcclusion", look.worldGiOcclusion);
   flag("lightsFollowCamera", look.lightsFollowCamera);
+  flag("smoothCurves", look.smoothCurves);
+  flag("roundedEdges", look.roundedEdges);
+  flag("softStudRoots", look.softStudRoots);
   return look;
 }
 
@@ -1922,6 +1925,9 @@ Changed setRenderLookCommand(Session::Impl& s, const RenderLook& look) {
   flag("raytracedGlass", look.raytracedGlass, current.raytracedGlass);
   flag("worldGiOcclusion", look.worldGiOcclusion, current.worldGiOcclusion);
   flag("lightsFollowCamera", look.lightsFollowCamera, current.lightsFollowCamera);
+  flag("smoothCurves", look.smoothCurves, current.smoothCurves);
+  flag("roundedEdges", look.roundedEdges, current.roundedEdges);
+  flag("softStudRoots", look.softStudRoots, current.softStudRoots);
   setFieldObject(video, "materials", materials);
   setFieldObject(native, "look", own);
   setFieldObject(after, "video", video);

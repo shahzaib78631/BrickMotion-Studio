@@ -54,6 +54,24 @@ TEST_CASE("look round-trips with one undo step", "[export]") {
   bm_session_free(s);
 }
 
+TEST_CASE("rounding switches round-trip and reach the still arguments", "[export]") {
+  BmSession* s = openHeli();
+  BmRenderLook look = bm_session_render_look(s);
+  CHECK(look.smooth_curves);
+  CHECK(look.rounded_edges);
+  CHECK(look.soft_stud_roots);
+  look.smooth_curves = false;
+  look.soft_stud_roots = false;
+  BmChange c = bm_session_set_render_look(s, look);
+  CHECK(c.refused.len == 0);
+  bm_change_free(c);
+  const BmRenderLook back = bm_session_render_look(s);
+  CHECK_FALSE(back.smooth_curves);
+  CHECK(back.rounded_edges);
+  CHECK_FALSE(back.soft_stud_roots);
+  bm_session_free(s);
+}
+
 TEST_CASE("scenes are listed", "[export]") {
   BmScenes* scenes = bm_scenes();
   CHECK(bm_scenes_len(scenes) == 34);
@@ -91,6 +109,7 @@ TEST_CASE("export options match bmapp", "[export]") {
   BmStillChoice still{0, false, 128, false, {}};
   BmRenderLook look{};
   look.scene = "";
+  look.smooth_curves = look.rounded_edges = look.soft_stud_roots = true;  // zero would turn the rounding off
   CHECK(joined(bm_still_arguments(still, look)) == "--size 1920x1080 --samples 128 --no-denoise --lights-fixed");
   CHECK(take(bm_still_summary(still, false)) == "Still · 1920 × 1080 · Standard");
   CHECK(take(bm_safe_file_stem("a/b:c")) == "a b c");

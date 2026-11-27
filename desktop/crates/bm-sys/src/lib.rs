@@ -702,6 +702,9 @@ pub struct BmRenderLook {
     pub world_gi_occlusion: bool,
     pub lights_follow_camera: bool,
     pub path_samples: i32,
+    pub smooth_curves: bool,
+    pub rounded_edges: bool,
+    pub soft_stud_roots: bool,
 }
 #[repr(C)]
 #[derive(Clone, Copy, Debug)]

@@ -140,6 +140,20 @@ TEST_CASE("still arguments", "[export]") {
             byte(scene.background.y) + "," + byte(scene.background.z));
 }
 
+TEST_CASE("still arguments carry the rounding switches that are off", "[export]") {
+  bmapp::StillChoice choice;
+  bmapp::RenderLook look;
+  const auto all = joined(bmapp::stillArguments(choice, look));
+  CHECK(all.find("--no-smooth-curves") == std::string::npos);
+  look.smoothCurves = false;
+  look.roundedEdges = false;
+  look.softStudRoots = false;
+  const auto off = joined(bmapp::stillArguments(choice, look));
+  CHECK(off.find("--no-smooth-curves") != std::string::npos);
+  CHECK(off.find("--no-rounded-edges") != std::string::npos);
+  CHECK(off.find("--no-soft-stud-roots") != std::string::npos);
+}
+
 TEST_CASE("summaries", "[export]") {
   bmapp::MovieChoice movie;
   CHECK(bmapp::movieSummary(movie) == "Build · 1920 × 1080 · 30 fps");

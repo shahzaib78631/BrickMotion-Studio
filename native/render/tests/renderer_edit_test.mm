@@ -179,3 +179,36 @@ TEST_CASE("hidden pieces stay hidden at rest and are left out of the selection's
   rig.renderer->setHidden({});
   CHECK_FALSE(rig.renderer->selectionBounds().empty());
 }
+
+TEST_CASE("changing the rounding redraws the parts and keeps selection and hiding", "[gpu][render][edit]") {
+  NEED_GPU();
+  bmtest::GpuRig rig(three());
+  REQUIRE(rig.renderer);
+  CHECK(rig.renderer->rounding() == Rounding{});
+  rig.renderer->select({0});
+  rig.renderer->setHidden({2});
+  const Image rounded = rig.shot(bmtest::plainOptions());
+  const Rounding square{false, false, false};
+  rig.renderer->setRounding(square);
+  CHECK(rig.renderer->rounding() == square);
+  const Image edited = rig.shot(bmtest::plainOptions());
+  const Scene& s = rig.renderer->scene();
+  CHECK(s.groups[s.where[0].first].instances[s.where[0].second].flags & kSelected);
+  CHECK(s.groups[s.where[2].first].instances[s.where[2].second].flags & kUserHidden);
+
+  bmtest::GpuRig fresh(three());
+  fresh.renderer = Renderer::create(fresh.model, fresh.full, fresh.low, square);
+  REQUIRE(fresh.renderer);
+  fresh.renderer->resize(fresh.width, fresh.height);
+  fresh.camera = rig.camera;
+  fresh.renderer->select({0});
+  fresh.renderer->setHidden({2});
+  const Image want = fresh.shot(bmtest::plainOptions());
+  REQUIRE(edited.rgba.size() == want.rgba.size());
+  CHECK(std::memcmp(edited.rgba.data(), want.rgba.data(), want.rgba.size()) == 0);  // as if made that way
+  CHECK(std::memcmp(edited.rgba.data(), rounded.rgba.data(), rounded.rgba.size()) != 0);
+
+  rig.renderer->setRounding({});
+  const Image back = rig.shot(bmtest::plainOptions());
+  CHECK(std::memcmp(back.rgba.data(), rounded.rgba.data(), rounded.rgba.size()) == 0);
+}

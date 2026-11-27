@@ -67,6 +67,18 @@ TEST_CASE("a still without denoising is written too, and differs", "[bmexport]")
   REQUIRE(bytes(a) != bytes(b));
 }
 
+TEST_CASE("a still drawn without rounding differs from the rounded one", "[bmexport]") {
+  if (!canTrace()) SKIP("no compute ray tracing or BM_LDRAW_DIR");
+  const fs::path a = scratch() / "rounded.png", b = scratch() / "square.png";
+  const std::string args = "still '" + model().string() + "' --size 96x64 --samples 4 --no-denoise --azimuth 30 --elevation 30 --out ";
+  REQUIRE(run(args + "'" + a.string() + "'").code == 0);
+  const Run square = run(args + "'" + b.string() + "' --no-smooth-curves --no-rounded-edges --no-soft-stud-roots");
+  INFO(square.output);
+  REQUIRE(square.code == 0);
+  REQUIRE(bytes(b).size() > 100);
+  REQUIRE(bytes(a) != bytes(b));
+}
+
 TEST_CASE("without ray tracing, bmexport says so in one line", "[bmexport]") {
   const Run r = run("still '" + model().string() + "' --size 32x32 --out '" + (scratch() / "none.png").string() + "'", "BM_FORCE_NO_RT=1");
   REQUIRE(r.code == 2);

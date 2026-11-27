@@ -132,7 +132,9 @@ struct Renderer::Impl {
   Device* device = nullptr;
   const bm::Model* model = nullptr;
   bm::ldraw::PartCache* full = nullptr;
+  bm::ldraw::PartCache* low = nullptr;
   std::unique_ptr<MeshLibrary> meshes;
+  Rounding rounding;
   Scene scene;
   Pipelines pipelines;
 

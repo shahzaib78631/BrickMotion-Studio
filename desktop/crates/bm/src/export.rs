@@ -67,6 +67,12 @@ pub struct RenderLook {
     pub lights_follow_camera: bool,
     /// Path tracing: samples a pixel, 8–1024.
     pub path_samples: i32,
+    /// Studs and curves from 48-sided primitives (`--no-smooth-curves` when off).
+    pub smooth_curves: bool,
+    /// Narrow shading fillets on convex edges (`--no-rounded-edges`).
+    pub rounded_edges: bool,
+    /// A soft base where a stud meets the deck (`--no-soft-stud-roots`).
+    pub soft_stud_roots: bool,
 }
 
 impl Default for RenderLook {
@@ -82,6 +88,9 @@ impl Default for RenderLook {
             world_gi_occlusion: true,
             lights_follow_camera: false,
             path_samples: 64,
+            smooth_curves: true,
+            rounded_edges: true,
+            soft_stud_roots: true,
         }
     }
 }
@@ -99,6 +108,9 @@ impl RenderLook {
             world_gi_occlusion: l.world_gi_occlusion,
             lights_follow_camera: l.lights_follow_camera,
             path_samples: l.path_samples,
+            smooth_curves: l.smooth_curves,
+            rounded_edges: l.rounded_edges,
+            soft_stud_roots: l.soft_stud_roots,
         }
     }
     fn to_raw(&self, keep: &mut Keep) -> sys::BmRenderLook {
@@ -113,6 +125,9 @@ impl RenderLook {
             world_gi_occlusion: self.world_gi_occlusion,
             lights_follow_camera: self.lights_follow_camera,
             path_samples: self.path_samples,
+            smooth_curves: self.smooth_curves,
+            rounded_edges: self.rounded_edges,
+            soft_stud_roots: self.soft_stud_roots,
         }
     }
 }

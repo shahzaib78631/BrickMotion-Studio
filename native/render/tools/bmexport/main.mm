@@ -38,6 +38,7 @@ int usage() {
   std::fprintf(stderr,
                "usage: bmexport still <model file> --out <png> [--frame N] [--samples S] [--seed K] [--rig build-fl] [--no-denoise] [--denoise-device cpu|metal]\n"
                "                [--size WxH] [--azimuth a --elevation e | --eye x,y,z --target x,y,z] [--fov deg] [--lights-fixed|--lights-follow] [--background r,g,b] [--repeat CxR] [--correct]\n"
+               "                [--no-smooth-curves] [--no-rounded-edges] [--no-soft-stud-roots]\n"
                "       bmexport build-video <project> --out <mp4> [--size WxH] [--fps 24|25|30|50|60] [--model name]\n"
                "       bmexport sound <model file> --out <wav> [--size WxH] [sound options]   the build's snaps, 48 kHz stereo (--size: the film's shape, for panning)\n"
                "       bmexport sound-gallery <dir> [sound options]          the listening cases, one WAV each\n"
@@ -128,7 +129,7 @@ int still(const std::vector<std::string_view>& args) {
       bmtools::reportCorrections("bmexport", model, planned->corrections);
     }
     bmr::Scene scene = bmr::buildScene(model, full);
-    bmr::MeshLibrary meshes(model, full, low);
+    bmr::MeshLibrary meshes(model, full, low, shot.rounding);
     bmr::OrbitCamera orbit;
     if (!bmtools::shotCamera(shot, scene.bounds, nullptr, orbit)) return usage();
     if (shot.frame >= 0) {

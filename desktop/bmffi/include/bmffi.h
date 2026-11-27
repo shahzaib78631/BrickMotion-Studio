@@ -799,6 +799,8 @@ typedef struct {
   int32_t shading;
   bool edges, shadows, ambient_occlusion, floor, raytraced_glass, world_gi_occlusion, lights_follow_camera;
   int32_t path_samples;
+  /// How parts are rounded for display: 48-sided curves, edge fillets, soft stud bases (all on by default).
+  bool smooth_curves, rounded_edges, soft_stud_roots;
 } BmRenderLook;
 /// `collection`: 0 photo, 1 render, 2 classic. Strings live until bm_scenes_free.
 typedef struct {

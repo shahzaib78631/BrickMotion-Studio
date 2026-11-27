@@ -91,6 +91,34 @@ TEST_CASE("the look is saved with the web's keys and undoes as one step", "[bmap
   CHECK_FALSE(session.setRenderLook(unknown).refused.empty());
 }
 
+TEST_CASE("rounding is on by default, saved under the native look, and reopened", "[bmapp][look]") {
+  bmapp::Session session;
+  blankWithParts(session);
+  const auto original = session.renderLook();
+  CHECK(original.smoothCurves);
+  CHECK(original.roundedEdges);
+  CHECK(original.softStudRoots);
+  CHECK_FALSE(settingsOf(session)["native"]["look"].contains("smoothCurves"));  // old projects read as all on
+
+  auto look = original;
+  look.smoothCurves = false;
+  look.roundedEdges = false;
+  look.softStudRoots = false;
+  REQUIRE(session.setRenderLook(look).refused.empty());
+  const auto settings = settingsOf(session);
+  CHECK(settings["native"]["look"]["smoothCurves"] == false);
+  CHECK(settings["native"]["look"]["roundedEdges"] == false);
+  CHECK(settings["native"]["look"]["softStudRoots"] == false);
+
+  bmapp::Session reopened;
+  REQUIRE(reopened.openBytes(session.projectBytes(), "rounding.brickmotion").ok);
+  CHECK_FALSE(reopened.renderLook().smoothCurves);
+  CHECK_FALSE(reopened.renderLook().roundedEdges);
+  CHECK_FALSE(reopened.renderLook().softStudRoots);
+  REQUIRE(session.undo().refused.empty());
+  CHECK(session.renderLook().smoothCurves);
+}
+
 TEST_CASE("a scene without a floor turns the floor off until one is asked for", "[bmapp][look]") {
   bmapp::Session session;
   blankWithParts(session);
@@ -591,4 +619,34 @@ TEST_CASE("Build Staging's Apply is one undo step for the layout, the turn and s
   REQUIRE(session.applyStaging(gallery, 30, true).refused.empty());
   CHECK(session.undoDepth() == unchangedDepth);
   CHECK_FALSE(session.applyStaging(gallery, NAN, false).refused.empty());
+}
+
+TEST_CASE("turning rounding off redraws the model in place without replanning", "[bmapp][look][viewport]") {
+  bmapp::Session session;
+  blankWithParts(session);
+  bmapp::Viewport viewport(session);
+  if (!viewport.ok()) SKIP("no Metal device");
+  viewport.resize(160, 120, 1);
+  viewport.setPreferences({});
+  viewport.view(bmapp::ViewPreset::Front);
+  viewport.requestPlan();
+  finishPlan(viewport);
+  const uint64_t planned = viewport.plannedVersion();
+  REQUIRE(planned != 0);
+  session.select({0}, bmapp::SelectMode::Replace);
+  viewport.draw(nullptr);
+  const auto rounded = viewport.readback().rgba;
+
+  auto look = session.renderLook();
+  look.smoothCurves = look.roundedEdges = look.softStudRoots = false;
+  REQUIRE(session.setRenderLook(look).refused.empty());
+  viewport.draw(nullptr);
+  const auto square = viewport.readback().rgba;
+  REQUIRE(square.size() == rounded.size());
+  CHECK(std::memcmp(square.data(), rounded.data(), rounded.size()) != 0);
+  // A look change keeps the plan: no planning run, the same plan carried to the new version.
+  CHECK(viewport.planState() == bmapp::PlanState::Ready);
+  CHECK(viewport.plannedVersion() == session.version());
+  CHECK(viewport.plannedVersion() > planned);
+  CHECK(session.selection() == std::vector<uint32_t>{0});
 }
