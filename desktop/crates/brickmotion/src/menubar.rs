@@ -74,6 +74,9 @@ pub fn menu_model() -> Vec<MenuSection> {
                 C("model.duplicate"),
                 C("edit.clone"),
                 C("model.rotate"),
+                C("model.rotate_back"),
+                C("edit.raise"),
+                C("edit.lower"),
                 Sep,
                 C("edit.select_all"),
                 C("edit.select_none"),
@@ -82,8 +85,56 @@ pub fn menu_model() -> Vec<MenuSection> {
             ],
         },
         MenuSection {
+            title: "Model",
+            items: vec![
+                C("model.add_part"),
+                C("model.replace"),
+                C("model.recolour"),
+                Sep,
+                C("model.make_submodel"),
+                C("model.extract"),
+                C("model.make_unique"),
+                C("model.new_submodel"),
+                Sep,
+                C("model.group"),
+                C("model.ungroup"),
+                Sep,
+                C("edit.smart_joints"),
+                C("edit.collision"),
+                C("model.seat_loose"),
+                C("inspect.model_checks"),
+                C("model.what_fits"),
+                Sep,
+                C("model.build_settings"),
+            ],
+        },
+        MenuSection {
+            title: "Steps",
+            items: vec![
+                C("step.edit"),
+                C("step.insert_before"),
+                C("step.insert_after"),
+                C("step.delete"),
+                Sep,
+                C("step.split"),
+                C("step.merge"),
+                C("step.move_up"),
+                C("step.move_down"),
+                C("model.to_step"),
+                Sep,
+                C("step.play"),
+                C("step.play_to_end"),
+                Sep,
+                C("step.appearance_assembled"),
+                C("step.appearance_separated"),
+                C("step.appearance_laid_out"),
+                C("step.appearance_exploded"),
+                C("step.show_all"),
+            ],
+        },
+        MenuSection {
             title: "View",
-            items: vec![C("view.fit"), C("view.home"), C("view.frame_selection"), Sep, C("view.front"), C("view.back"), C("view.left"), C("view.right"), C("view.top"), C("view.bottom"), Sep, C("view.orthographic"), Sep, C("view.look"), C("view.joints"), Sep, C("view.record"), Sep, C("view.palette")],
+            items: vec![C("view.fit"), C("view.home"), C("view.frame_selection"), Sep, C("view.front"), C("view.back"), C("view.left"), C("view.right"), C("view.top"), C("view.bottom"), Sep, C("view.orthographic"), Sep, C("view.look"), C("view.joints"), Sep, C("view.record")],
         },
         MenuSection {
             title: "Window",
@@ -98,6 +149,7 @@ pub fn menu_model() -> Vec<MenuSection> {
                 S(SystemItem::BringAllToFront),
             ],
         },
+        MenuSection { title: "Help", items: vec![C("help.shortcuts"), C("view.palette")] },
     ]
 }
 
@@ -180,6 +232,9 @@ impl MenuBar {
             }
             if section.title == "Window" {
                 sub.set_as_windows_menu_for_nsapp();
+            }
+            if section.title == "Help" {
+                sub.set_as_help_menu_for_nsapp();
             }
             let _ = menu.append(&sub);
         }
@@ -290,8 +345,15 @@ mod tests {
     fn edit_menu_order() {
         let m = menu_model();
         let titles: Vec<&str> = m.iter().map(|s| s.title).collect();
-        assert_eq!(titles, ["BrickMotion", "File", "Edit", "View", "Window"]);
-        assert!(m[4].items.contains(&MenuEntry::Command("output.render_queue")), "Window › Render Queue");
+        assert_eq!(titles, ["BrickMotion", "File", "Edit", "Model", "Steps", "View", "Window", "Help"]);
+        assert!(m[6].items.contains(&MenuEntry::Command("output.render_queue")), "Window › Render Queue");
+        assert_eq!(m[7].items, vec![MenuEntry::Command("help.shortcuts"), MenuEntry::Command("view.palette")]);
+        for id in ["model.make_submodel", "model.extract", "model.make_unique", "model.new_submodel", "model.group", "model.ungroup"] {
+            assert!(m[3].items.contains(&MenuEntry::Command(id)), "Model › {id}");
+        }
+        for id in ["step.edit", "step.split", "step.merge", "step.play_to_end", "step.appearance_exploded", "model.to_step"] {
+            assert!(m[4].items.contains(&MenuEntry::Command(id)), "Steps › {id}");
+        }
         let edit = &m[2];
         assert_eq!(
             edit.items,
@@ -308,6 +370,9 @@ mod tests {
                 MenuEntry::Command("model.duplicate"),
                 MenuEntry::Command("edit.clone"),
                 MenuEntry::Command("model.rotate"),
+                MenuEntry::Command("model.rotate_back"),
+                MenuEntry::Command("edit.raise"),
+                MenuEntry::Command("edit.lower"),
                 MenuEntry::Separator,
                 MenuEntry::Command("edit.select_all"),
                 MenuEntry::Command("edit.select_none"),

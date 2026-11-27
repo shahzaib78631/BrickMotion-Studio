@@ -1,6 +1,7 @@
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
+use crate::chrome::naming::{NameFor, Naming};
 use crate::autosave::Autosaver;
 use crate::chrome;
 use crate::commands::{Ctx, run, tabs};
@@ -105,6 +106,10 @@ pub struct BrickMotionApp {
     pub recents: Recents,
     /// Waiting for an answer to "Save changes?".
     pub confirm: Option<Pending>,
+    /// The naming sheet (Make Submodel, New Submodel, Group…), while open.
+    pub naming: Option<crate::chrome::naming::Naming>,
+    /// Help › Keyboard Shortcuts is showing.
+    pub shortcuts_open: bool,
     /// The person agreed to replace this document as it stood; a load arriving while it is
     /// unchanged takes its place without asking again.
     replace_ok: Option<ReplaceOk>,
@@ -258,6 +263,8 @@ impl BrickMotionApp {
             prefs,
             recents,
             confirm: None,
+            naming: None,
+            shortcuts_open: false,
             replace_ok: None,
             quitting: false,
             quit_after: false,
@@ -768,8 +775,7 @@ impl BrickMotionApp {
             "model.make_submodel" => {
                 let sel = s.selection();
                 let name = s.free_submodel_name("Submodel");
-                let c = s.make_submodel(&sel, &name);
-                self.edited(c);
+                self.naming = Some(Naming::new(NameFor::MakeSubmodel, name, sel));
             }
             "model.extract" => {
                 if let Some(&piece) = s.selection().first() {
@@ -785,9 +791,14 @@ impl BrickMotionApp {
             }
             "model.new_submodel" => {
                 let name = s.free_submodel_name("Submodel");
-                let c = s.new_submodel(&name);
-                self.edited(c);
+                self.naming = Some(Naming::new(NameFor::NewSubmodel, name, Vec::new()));
             }
+            "model.group" => {
+                let sel = s.selection();
+                let name = s.groups_of(&sel).into_iter().next().unwrap_or_else(|| crate::chrome::naming::free_group_name(&s.group_names()));
+                self.naming = Some(Naming::new(NameFor::Group, name, sel));
+            }
+            "help.shortcuts" => self.shortcuts_open = true,
             "model.ungroup" => {
                 let sel = s.selection();
                 let c = s.set_group(&sel, "");
@@ -1117,6 +1128,27 @@ impl BrickMotionApp {
     }
 
     /// After an edit: a refusal becomes a notice.
+    /// Closes the naming sheet: `confirm` makes the submodel or group with the typed name. An
+    /// empty name keeps the sheet open.
+    pub fn finish_naming(&mut self, confirm: bool) {
+        let Some(n) = self.naming.take() else { return };
+        if !confirm {
+            return;
+        }
+        let name = n.text.trim().to_owned();
+        if name.is_empty() {
+            self.naming = Some(n);
+            return;
+        }
+        let s = self.doc.session();
+        let c = match n.kind {
+            NameFor::MakeSubmodel => s.make_submodel(&n.pieces, &name),
+            NameFor::NewSubmodel => s.new_submodel(&name),
+            NameFor::Group => s.set_group(&n.pieces, &name),
+        };
+        self.edited(c);
+    }
+
     pub(crate) fn edited(&mut self, c: bm::Changed) {
         if let Some(why) = c.refused {
             self.last_refusal = Some(why.clone());
@@ -1568,6 +1600,7 @@ impl eframe::App for BrickMotionApp {
         chrome::replace::show(ui, self);
         crate::flights::show_confirm(ui, self);
         chrome::confirm::show(ui, self);
+        chrome::naming::show(ui, self);
         self.run_requested();
         self.poll_placement(ui.ctx());
         self.previews.frame_end();

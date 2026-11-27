@@ -6,11 +6,13 @@ pub mod camera_panel;
 pub mod callout;
 pub mod checks_panel;
 pub mod confirm;
+pub mod context_menu;
 pub mod dope_sheet;
 pub mod float_panel;
 pub mod joints;
 pub mod keys_panel;
 pub mod motion_panel;
+pub mod naming;
 pub mod keys_track;
 pub mod library;
 pub mod export_movie;
@@ -65,6 +67,9 @@ pub fn central(ui: &mut Ui, app: &mut BrickMotionApp) {
         app.viewport.suppress_rotate_gizmo = joints::owns_rotate_gizmo(app);
         app.viewport.suppress_auto_plan = app.joints.dragging();
         app.viewport.show(ui, &mut app.doc, &mut app.edit, &t, app.prefs.auto_plan, playing, planning);
+        if let Some(resp) = app.viewport.response.take() {
+            context_menu::show(app, &resp);
+        }
         if let Some(piece) = app.viewport.double_clicked_piece.take() {
             if app.workspace == crate::Workspace::Animate {
                 let start = app

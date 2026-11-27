@@ -121,6 +121,13 @@ pub(crate) fn beep() {
     }
 }
 
+/// What a right-click in the viewport landed on.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ContextTarget {
+    Piece(u32),
+    Empty,
+}
+
 #[derive(Default)]
 pub struct ViewportWidget {
     pub mode: DragMode,
@@ -166,7 +173,10 @@ pub struct ViewportWidget {
     /// The last total change an Auto Key drag keyed (tests read it).
     pub(crate) last_auto_change: Option<bm::Vec3>,
     waiting_drag: Option<u32>,
-    waiting_menu_piece: Option<u32>,
+    /// What the last right-click hit, for the chrome's context menu.
+    pub context_target: Option<ContextTarget>,
+    /// This frame's viewport response, for the chrome's context menu.
+    pub(crate) response: Option<egui::Response>,
     last_auto_plan: Option<bool>,
     last_plan_poll: Option<std::time::Instant>,
 }
@@ -204,7 +214,7 @@ impl ViewportWidget {
         self.double_clicked_piece = None;
         self.auto_drag = None;
         self.waiting_drag = None;
-        self.waiting_menu_piece = None;
+        self.context_target = None;
         self.last_auto_plan = None;
     }
 
@@ -475,7 +485,7 @@ impl ViewportWidget {
                 let _ = vp.end_waiting_drag();
             }
             self.pending_waiting_drag = None;
-            self.waiting_menu_piece = None;
+            self.context_target = None;
         }
 
         // Handle waiting-part floor drag when paused mid-build (and not dragging a gizmo).
@@ -603,38 +613,28 @@ impl ViewportWidget {
             }
         }
 
-        // Context menu for turning a waiting part on the floor.
+        // Right-click: remember what was under the pointer; the chrome draws the menu for it. A
+        // piece outside the selection becomes the selection, as a left click would make it.
         if resp.secondary_clicked() && !playing && !placing {
-            self.waiting_menu_piece = resp.interact_pointer_pos().and_then(|pos| {
+            let hit = resp.interact_pointer_pos().and_then(|pos| {
                 let pt = to_bm(pos);
-                let vp = doc.viewport()?;
-                vp.pick(pt.x, pt.y).filter(|&p| vp.can_turn_waiting_part(p))
+                doc.viewport()?.pick(pt.x, pt.y)
+            });
+            self.context_target = Some(match hit {
+                Some(piece) => {
+                    let waiting = doc.viewport().is_some_and(|vp| vp.can_turn_waiting_part(piece));
+                    let sel = doc.session().selection();
+                    if !waiting && !sel.contains(&piece) {
+                        let pieces = pick_targets(doc.session(), piece, edit.pick_scope, false);
+                        doc.session().select(&pieces, bm::SelectMode::Replace);
+                        changed = true;
+                    }
+                    ContextTarget::Piece(piece)
+                }
+                None => ContextTarget::Empty,
             });
         }
-        let mut waiting_turn: Option<(u32, f64)> = None;
-        if let Some(piece) = self.waiting_menu_piece {
-            let match_deg = doc.viewport().map_or(0.0, |vp| vp.waiting_turn_to_match(piece));
-            resp.context_menu(|ui| {
-                use crate::chrome::menu;
-                use crate::icons::Icon;
-                menu::prepare(ui);
-                if menu::item(ui, theme, Some(Icon::Rotate), "Turn Waiting Part 90°", None, true) {
-                    waiting_turn = Some((piece, 90.0));
-                }
-                if menu::item(ui, theme, Some(Icon::Undo), "Turn Waiting Part −90°", None, true) {
-                    waiting_turn = Some((piece, -90.0));
-                }
-                menu::separator(ui, theme);
-                if menu::item(ui, theme, Some(Icon::Target), "Turn to Match", None, match_deg.abs() > 1e-3) {
-                    waiting_turn = Some((piece, match_deg));
-                }
-            });
-        }
-        if let Some((piece, deg)) = waiting_turn {
-            doc.session().turn_waiting_part(piece, deg);
-            self.waiting_menu_piece = None;
-            changed = true;
-        }
+        self.response = Some(resp.clone());
 
         // Read the response first: its methods lock the context, so they cannot run inside ui.input.
         let primary_drag = if !gizmo_consumed_primary && resp.dragged_by(egui::PointerButton::Primary) {

@@ -15,12 +15,16 @@ fn ordered() -> Vec<(Shortcut, &'static str)> {
 /// text field. A matched key is consumed, so widgets do not also act on it. With the menu bar
 /// installed, ⌘ keys belong to it (AppKit gives them to the menu first), so they run once.
 pub fn handle(app: &mut BrickMotionApp, ctx: &egui::Context) {
-    // A slider being dragged or typed into owns Esc and the plain keys (Esc reverts it).
+    // A slider being dragged or typed into owns Esc and the plain keys (Esc reverts it); so does an open menu.
     let typing = app.text_focus
         || app.palette.open
         || app.swatches.open.is_some()
         || app.steps.editor.is_some()
         || app.replace.open
+        || app.naming.is_some()
+        || app.shortcuts_open
+        // An open menu or popup owns Esc and the arrow keys.
+        || egui::Popup::is_any_open(ctx)
         || crate::chrome::widgets::slider_active(ctx);
 
     // While placing a part, Tab, ⇧Tab, R, Return and Esc belong to the placement before the registry.
