@@ -820,6 +820,10 @@ pub struct BmInventory {
 pub struct BmInventoryReport {
     _private: [u8; 0],
 }
+#[repr(C)]
+pub struct BmModelImport {
+    _private: [u8; 0],
+}
 
 #[repr(C)]
 pub struct BmJointInfoHandle {
@@ -1272,6 +1276,25 @@ unsafe extern "C" {
     pub fn bm_joint_info_error(h: *const BmJointInfoHandle) -> *const c_char;
     pub fn bm_joint_info_free(h: *mut BmJointInfoHandle);
     pub fn bm_inspection_change_joint_ex(i: *mut BmInspection, fixed: u32, moving: u32, degrees: f64, slide_ldu: f64, axis_override: BmVec3, collision: bool) -> *mut BmJointEdit;
+
+    // ---- Submodels, groups, scale and import into ----
+    pub fn bm_session_free_submodel_name(s: *const BmSession, preferred: *const c_char) -> BmString;
+    pub fn bm_session_new_submodel(s: *mut BmSession, name: *const c_char) -> BmChange;
+    pub fn bm_session_make_submodel(s: *mut BmSession, pieces: *const u32, n: usize, name: *const c_char) -> BmChange;
+    pub fn bm_session_extract(s: *mut BmSession, piece: u32) -> BmChange;
+    pub fn bm_session_move_to_model(s: *mut BmSession, pieces: *const u32, n: usize, submodel: *const c_char) -> BmChange;
+    pub fn bm_session_rename_submodel(s: *mut BmSession, from: *const c_char, to: *const c_char) -> BmChange;
+    pub fn bm_session_delete_submodel(s: *mut BmSession, submodel: *const c_char) -> BmChange;
+    pub fn bm_session_make_unique(s: *mut BmSession, piece: u32) -> BmChange;
+    pub fn bm_session_set_group(s: *mut BmSession, pieces: *const u32, n: usize, group: *const c_char) -> BmChange;
+    pub fn bm_session_group_names(s: *const BmSession) -> BmString;
+    pub fn bm_session_groups_of(s: *const BmSession, pieces: *const u32, n: usize) -> BmString;
+    pub fn bm_session_select_group(s: *mut BmSession, group: *const c_char);
+    pub fn bm_session_scale(s: *mut BmSession, pieces: *const u32, n: usize, factor: BmVec3, axes: BmMat3, pivot: BmVec3, continuing: bool) -> BmChange;
+    pub fn bm_model_import_read(path: *const c_char) -> *mut BmModelImport;
+    pub fn bm_model_import_error(m: *const BmModelImport) -> *const c_char;
+    pub fn bm_session_import_model(s: *mut BmSession, m: *const BmModelImport, into: *const c_char, generation: u64) -> BmChange;
+    pub fn bm_model_import_free(m: *mut BmModelImport);
 }
 
 /// Every function declared above, for the header agreement test.
@@ -1392,4 +1415,9 @@ pub const DECLARED: &[&str] = &[
     "bm_session_focus", "bm_session_focused", "bm_session_focus_path", "bm_session_use_pieces", "bm_lanes_submodel_path",
     "bm_inspection_joint_info", "bm_joint_info_data", "bm_joint_info_pieces", "bm_joint_info_min_blocker",
     "bm_joint_info_max_blocker", "bm_joint_info_error", "bm_joint_info_free", "bm_inspection_change_joint_ex",
+    "bm_session_free_submodel_name", "bm_session_new_submodel", "bm_session_make_submodel", "bm_session_extract",
+    "bm_session_move_to_model", "bm_session_rename_submodel", "bm_session_delete_submodel", "bm_session_make_unique",
+    "bm_session_set_group", "bm_session_group_names", "bm_session_groups_of", "bm_session_select_group",
+    "bm_session_scale", "bm_model_import_read", "bm_model_import_error", "bm_session_import_model",
+    "bm_model_import_free",
 ];

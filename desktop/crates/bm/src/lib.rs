@@ -13,6 +13,7 @@ pub mod placement;
 pub mod playback;
 pub mod recorder;
 mod session;
+mod submodels;
 pub mod settings;
 pub mod steps;
 pub mod timeline;
@@ -26,6 +27,7 @@ pub use error::OpenError;
 pub use geom::{Arrow, BRICK, Camera, Mat3, PLATE, Pose, STUD, Vec2, Vec3, arrow_axis};
 pub use outline::{Changed, ColorInfo, OutlineRow, PieceInfo, Snapshot};
 pub use session::{OpenInfo, SelectMode, Session};
+pub use submodels::ModelImport;
 pub use viewport::{Frame, ViewPreset, Viewport};
 
 /// Copies an engine string and frees it.

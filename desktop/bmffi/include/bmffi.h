@@ -996,6 +996,32 @@ BMFFI_API void bm_inventory_report_free(BmInventoryReport* r);
 BMFFI_API BmChange bm_session_import_inventory(BmSession* s, const BmInventory* inv);
 BMFFI_API void bm_inventory_free(BmInventory* inv);
 
+// ---- Submodels, groups, scale and import into ----
+typedef struct BmModelImport BmModelImport;
+
+/// `preferred`, else "<preferred> 2", 3, ...: the first name no submodel has.
+BMFFI_API BmString bm_session_free_submodel_name(const BmSession* s, const char* preferred);
+BMFFI_API BmChange bm_session_new_submodel(BmSession* s, const char* name);
+BMFFI_API BmChange bm_session_make_submodel(BmSession* s, const uint32_t* pieces, size_t n, const char* name);
+BMFFI_API BmChange bm_session_extract(BmSession* s, uint32_t piece);
+BMFFI_API BmChange bm_session_move_to_model(BmSession* s, const uint32_t* pieces, size_t n, const char* submodel);
+BMFFI_API BmChange bm_session_rename_submodel(BmSession* s, const char* from, const char* to);
+BMFFI_API BmChange bm_session_delete_submodel(BmSession* s, const char* submodel);
+BMFFI_API BmChange bm_session_make_unique(BmSession* s, uint32_t piece);
+/// Empty `group` removes the mark. Names are joined with '\n'.
+BMFFI_API BmChange bm_session_set_group(BmSession* s, const uint32_t* pieces, size_t n, const char* group);
+BMFFI_API BmString bm_session_group_names(const BmSession* s);
+BMFFI_API BmString bm_session_groups_of(const BmSession* s, const uint32_t* pieces, size_t n);
+BMFFI_API void bm_session_select_group(BmSession* s, const char* group);
+BMFFI_API BmChange bm_session_scale(BmSession* s, const uint32_t* pieces, size_t n, BmVec3 factor, BmMat3 axes,
+                                   BmVec3 pivot, bool continuing);
+/// Reads a model file once (safe off the main thread); check `bm_model_import_error`.
+BMFFI_API BmModelImport* bm_model_import_read(const char* path);
+BMFFI_API const char* bm_model_import_error(const BmModelImport* m);
+BMFFI_API BmChange bm_session_import_model(BmSession* s, const BmModelImport* m, const char* into,
+                                          uint64_t generation);
+BMFFI_API void bm_model_import_free(BmModelImport* m);
+
 #ifdef __cplusplus
 }
 #endif
