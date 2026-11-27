@@ -522,7 +522,7 @@ fn no_coming_soon_placeholders() {
     for c in brickmotion::commands::registry() {
         assert!(!c.tip.to_lowercase().contains("coming soon"), "{} still says coming soon", c.id);
     }
-    for id in ["model.submodel", "model.extract", "app.settings"] {
+    for id in ["model.submodel", "app.settings"] {
         assert!(brickmotion::commands::find(id).is_none(), "{id} is registered but not built");
     }
     let h = build_heli();

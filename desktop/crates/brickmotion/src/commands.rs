@@ -14,6 +14,8 @@ pub enum When {
     Pieces,
     /// The document has more than one piece.
     SeveralPieces,
+    /// Two or more pieces selected.
+    SeveralSelected,
     /// Something is selected.
     Selection,
     /// Exactly one piece is selected.
@@ -167,6 +169,7 @@ pub fn enabled(c: &Command, ctx: &Ctx) -> bool {
         When::Document => ctx.has_document,
         When::Pieces => ctx.pieces > 0,
         When::SeveralPieces => ctx.pieces > 1,
+        When::SeveralSelected => ctx.selected > 1,
         When::Selection => ctx.selected > 0,
         When::OnePiece => ctx.selected == 1,
         When::Step => ctx.has_document && ctx.step.is_some_and(|i| i < ctx.steps),
@@ -189,6 +192,7 @@ pub fn why_disabled(c: &Command, ctx: &Ctx) -> Option<&'static str> {
         When::Document => "Needs a document",
         When::Pieces => "Needs a model with pieces",
         When::SeveralPieces => "Needs at least two pieces",
+        When::SeveralSelected => "Select two or more pieces",
         When::Selection => "Needs a selection",
         When::OnePiece => "Select one piece first",
         When::Step => "Choose a step first",
@@ -278,6 +282,8 @@ static REGISTRY: &[Command] = &[
     Command { id: "model.move", title: "Move", icon: Icon::Move, keys: Some("M"), tip: "Drag the selection along the arrows; it snaps to studs and holes.", workspace: Workspace::Build, tab: "Model", group: "Modify", when: When::Document, menu: Menu::None },
     Command { id: "model.rotate", title: "Turn", icon: Icon::Rotate, keys: Some("R"), tip: "Turn the selection 90° clockwise around its centre.", workspace: Workspace::Build, tab: "Model", group: "Modify", when: When::Selection, menu: Menu::Edit },
     Command { id: "model.duplicate", title: "Duplicate", icon: Icon::Copy, keys: Some("⌘D"), tip: "Copy the selection and offset the copy by one stud.", workspace: Workspace::Build, tab: "Model", group: "Modify", when: When::Selection, menu: Menu::Edit },
+    Command { id: "model.make_submodel", title: "Make Submodel", icon: Icon::Group, keys: Some("⌥⌘G"), tip: "Turn the selected pieces into a submodel used once, in their place.", workspace: Workspace::Build, tab: "Model", group: "Arrange", when: When::SeveralSelected, menu: Menu::None },
+    Command { id: "model.extract", title: "Extract", icon: Icon::Extract, keys: None, tip: "Replace the selected submodel with its own pieces.", workspace: Workspace::Build, tab: "Model", group: "Arrange", when: When::Selection, menu: Menu::None },
     Command { id: "model.to_step", title: "To Step", icon: Icon::Step, keys: None, tip: "Gather the selected pieces into the chosen build step.", workspace: Workspace::Build, tab: "Model", group: "Arrange", when: When::StepSelection, menu: Menu::None },
     Command { id: "inspect.model_checks", title: "Model Checks", icon: Icon::Checks, keys: None, tip: "Check the model for overlaps, unsupported parts, tipping groups and missing definitions.", workspace: Workspace::Build, tab: "Inspect", group: "Checks", when: When::Document, menu: Menu::None },
     Command { id: "model.seat_loose", title: "Seat Loose", icon: Icon::Seat, keys: None, tip: "Find pieces placed a little off their connectors and seat them in one undo step.", workspace: Workspace::Build, tab: "Inspect", group: "Checks", when: When::SeveralPieces, menu: Menu::None },
@@ -353,4 +359,7 @@ static REGISTRY: &[Command] = &[
     Command { id: "transport.end", title: "Jump to End", icon: Icon::Next, keys: Some("End"), tip: "Seek to the end of the build.", workspace: Workspace::Animate, tab: "", group: "Playback", when: When::Document, menu: Menu::None },
     Command { id: "transport.prev_step", title: "Previous Step", icon: Icon::Prev, keys: Some("⇧←"), tip: "Jump to the previous build step on the timeline.", workspace: Workspace::Animate, tab: "", group: "Playback", when: When::Animate, menu: Menu::None },
     Command { id: "transport.next_step", title: "Next Step", icon: Icon::Next, keys: Some("⇧→"), tip: "Jump to the next build step on the timeline.", workspace: Workspace::Animate, tab: "", group: "Playback", when: When::Animate, menu: Menu::None },
+    Command { id: "model.new_submodel", title: "New Submodel", icon: Icon::Plus, keys: None, tip: "Add an empty submodel to this project.", workspace: Workspace::Build, tab: "", group: "Model", when: When::Document, menu: Menu::None },
+    Command { id: "model.make_unique", title: "Make Unique", icon: Icon::Copy, keys: None, tip: "Give this use of a submodel its own copy, so edits change only it.", workspace: Workspace::Build, tab: "", group: "Model", when: When::Selection, menu: Menu::None },
+    Command { id: "model.ungroup", title: "Remove from Group", icon: Icon::Group, keys: None, tip: "Take the selected pieces out of their group.", workspace: Workspace::Build, tab: "", group: "Model", when: When::Selection, menu: Menu::None },
 ];

@@ -765,6 +765,34 @@ impl BrickMotionApp {
             "model.replace" => self.replace.show_sheet(),
             "edit.clone" => crate::edit::clone(self),
             "model.duplicate" => crate::edit::duplicate(self),
+            "model.make_submodel" => {
+                let sel = s.selection();
+                let name = s.free_submodel_name("Submodel");
+                let c = s.make_submodel(&sel, &name);
+                self.edited(c);
+            }
+            "model.extract" => {
+                if let Some(&piece) = s.selection().first() {
+                    let c = s.extract(piece);
+                    self.edited(c);
+                }
+            }
+            "model.make_unique" => {
+                if let Some(&piece) = s.selection().first() {
+                    let c = s.make_unique(piece);
+                    self.edited(c);
+                }
+            }
+            "model.new_submodel" => {
+                let name = s.free_submodel_name("Submodel");
+                let c = s.new_submodel(&name);
+                self.edited(c);
+            }
+            "model.ungroup" => {
+                let sel = s.selection();
+                let c = s.set_group(&sel, "");
+                self.edited(c);
+            }
             "edit.raise" => crate::edit::raise(self, self.edit.alt_held),
             "edit.lower" => crate::edit::lower(self, self.edit.alt_held),
             "edit.nudge_left" => crate::edit::nudge_along(self, bm::Arrow::Left),
