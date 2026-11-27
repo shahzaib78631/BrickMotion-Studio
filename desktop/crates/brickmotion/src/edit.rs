@@ -57,6 +57,30 @@ impl Default for EditState {
     }
 }
 
+/// What Select Same matches on.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Same {
+    Part,
+    Colour,
+}
+
+/// Adds to the selection every visible piece that shares a part (or a colour) with it.
+pub fn select_same(s: &bm::Session, by: Same) {
+    let chosen = s.selection();
+    if chosen.is_empty() {
+        return;
+    }
+    let key = |p: u32| match by {
+        Same::Part => s.part_at(p).name,
+        Same::Colour => s.part_color(p).to_string(),
+    };
+    let wanted: std::collections::HashSet<String> = chosen.iter().map(|&p| key(p)).collect();
+    s.select_all();
+    let all = s.selection();
+    let same: Vec<u32> = all.into_iter().filter(|&p| wanted.contains(&key(p))).collect();
+    s.select(&same, bm::SelectMode::Replace);
+}
+
 /// Runs one engine edit against the current selection and surfaces any refusal as a notice.
 pub fn selection_edit(app: &mut BrickMotionApp, f: impl FnOnce(&bm::Session, &[u32]) -> bm::Changed) {
     let sel = app.doc.session().selection();

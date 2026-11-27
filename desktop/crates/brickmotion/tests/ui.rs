@@ -4,8 +4,13 @@ use egui::accesskit::Role;
 use egui_kittest::Harness;
 use egui_kittest::kittest::Queryable;
 
+/// An empty new project (with no document at all, Home stands in for the editor).
 fn harness() -> Harness<'static, BrickMotionApp> {
-    let mut h = Harness::builder().with_size([1440.0, 900.0]).build_eframe(|cc| BrickMotionApp::new_for_test_cc(cc, None));
+    let mut h = Harness::builder().with_size([1440.0, 900.0]).build_eframe(|cc| {
+        let mut app = BrickMotionApp::new_for_test_cc(cc, None);
+        app.new_document();
+        app
+    });
     h.run();
     h
 }
@@ -319,9 +324,10 @@ fn large_model_keeps_window_responsive() {
 }
 
 #[test]
-fn empty_launch_invites_open() {
-    let h = harness();
-    assert!(h.query_by_label("Open a model to begin").is_some());
+fn empty_launch_shows_home() {
+    let mut h = Harness::builder().with_size([1440.0, 900.0]).build_eframe(|cc| BrickMotionApp::new_for_test_cc(cc, None));
+    h.run();
+    assert!(h.query_by_label("Start something").is_some());
     assert!(h.query_by_label_contains("Metal").is_none());
 }
 

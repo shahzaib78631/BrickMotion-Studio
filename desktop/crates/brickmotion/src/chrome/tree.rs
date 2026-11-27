@@ -151,6 +151,13 @@ fn selected_submodel_rows(app: &mut BrickMotionApp, selection: &HashSet<u32>) ->
     ids
 }
 
+/// What a submodel row's menu asked for, done after the tree is drawn.
+enum RowAction {
+    Rename(String),
+    ImportInto(String),
+    Delete(String),
+}
+
 pub fn show(ui: &mut Ui, app: &mut BrickMotionApp, body_h: f32, pinned_h: bool) {
     let t0 = Instant::now();
     let t = app.theme;
@@ -166,6 +173,7 @@ pub fn show(ui: &mut Ui, app: &mut BrickMotionApp, body_h: f32, pinned_h: bool) 
     let mut toggled: Option<usize> = None;
     let mut exported: Option<(crate::FileExport, String)> = None;
     let mut video: Option<String> = None;
+    let mut row_action: Option<RowAction> = None;
     let content_h = (lines as f32 * ROW_H).max(ROW_H);
     let scroll_h = if pinned_h { body_h } else { content_h.min(body_h) };
     egui::ScrollArea::vertical()
@@ -230,22 +238,39 @@ pub fn show(ui: &mut Ui, app: &mut BrickMotionApp, body_h: f32, pinned_h: bool) 
                 clicked = Some((i, ui.input(|inp| inp.modifiers)));
             }
             let def = row.def.clone();
-            if !def.is_empty() && row.pieces > 0 {
+            if !def.is_empty() {
                 resp.context_menu(|ui| {
                     use super::menu;
                     menu::prepare(ui);
-                    if menu::item(ui, &t, Some(Icon::Layers), "Open Submodel", None, !row.unused) {
+                    if menu::item(ui, &t, Some(Icon::Layers), "Open", None, !row.unused) {
                         dbl_clicked = Some(i);
                     }
                     menu::separator(ui, &t);
-                    if menu::item(ui, &t, Some(Icon::Vid), "Export Video…", None, true) {
-                        video = Some(row.id.clone());
+                    if menu::item(ui, &t, None, "Rename…", None, true) {
+                        row_action = Some(RowAction::Rename(def.clone()));
                     }
-                    if menu::item(ui, &t, Some(Icon::File), "Export Project…", None, true) {
-                        exported = Some((crate::FileExport::SubmodelProject, def.clone()));
+                    if menu::item(ui, &t, Some(Icon::Import), "Import Model Into…", None, true) {
+                        row_action = Some(RowAction::ImportInto(def.clone()));
                     }
-                    if menu::item(ui, &t, Some(Icon::Up), "Export LDraw…", None, true) {
-                        exported = Some((crate::FileExport::SubmodelLdraw, def.clone()));
+                    let has_parts = row.pieces > 0;
+                    menu::submenu(ui, &t, Some(Icon::Up), "Export", |ui| {
+                        if menu::item(ui, &t, Some(Icon::Vid), "Video…", None, has_parts) {
+                            video = Some(row.id.clone());
+                        }
+                        if menu::item(ui, &t, Some(Icon::File), "Project…", None, has_parts) {
+                            exported = Some((crate::FileExport::SubmodelProject, def.clone()));
+                        }
+                        if menu::item(ui, &t, Some(Icon::Up), "LDraw…", None, has_parts) {
+                            exported = Some((crate::FileExport::SubmodelLdraw, def.clone()));
+                        }
+                    });
+                    menu::separator(ui, &t);
+                    let used = !row.unused;
+                    let r = ui.add_enabled_ui(!used, |ui| menu::item_destructive(ui, &t, Some(Icon::Close), "Delete Submodel", !used));
+                    if used {
+                        r.response.on_disabled_hover_text("Still used in the model. Extract or delete its uses first.");
+                    } else if r.inner {
+                        row_action = Some(RowAction::Delete(def.clone()));
                     }
                 });
             }
@@ -286,6 +311,17 @@ pub fn show(ui: &mut Ui, app: &mut BrickMotionApp, body_h: f32, pinned_h: bool) 
     }
     if let Some((kind, def)) = exported {
         app.export_bytes(kind, Some(&def));
+    }
+    match row_action {
+        Some(RowAction::Rename(def)) => {
+            app.naming = Some(super::naming::Naming::new(super::naming::NameFor::Rename(def.clone()), def, Vec::new()));
+        }
+        Some(RowAction::ImportInto(def)) => app.import_model_dialog(def),
+        Some(RowAction::Delete(def)) => {
+            let c = app.doc.session().delete_submodel(&def);
+            app.edited(c);
+        }
+        None => {}
     }
     app.tree.last_show = t0.elapsed();
 }

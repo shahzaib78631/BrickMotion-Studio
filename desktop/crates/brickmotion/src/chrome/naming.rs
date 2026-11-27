@@ -7,11 +7,13 @@ use crate::chrome::sheet;
 use crate::commands::{Shortcut, registry};
 
 /// What the name is for.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum NameFor {
     MakeSubmodel,
     NewSubmodel,
     Group,
+    /// Rename the submodel with this name.
+    Rename(String),
 }
 
 /// An open naming sheet.
@@ -35,16 +37,18 @@ impl Naming {
             NameFor::MakeSubmodel => "Make Submodel",
             NameFor::NewSubmodel => "New Submodel",
             NameFor::Group => "Group",
+            NameFor::Rename(_) => "Rename",
         }
     }
 
     fn note(&self) -> String {
         let n = self.pieces.len();
         let pieces = if n == 1 { "1 piece".to_owned() } else { format!("{n} pieces") };
-        match self.kind {
+        match &self.kind {
             NameFor::MakeSubmodel => format!("{pieces} become one submodel, used here once."),
             NameFor::NewSubmodel => "An empty submodel you can open and build in.".to_owned(),
             NameFor::Group => format!("Name a group for the {pieces} selected."),
+            NameFor::Rename(from) => format!("Every use of “{from}” takes the new name."),
         }
     }
 }

@@ -162,7 +162,11 @@ fn palette_enter_runs() {
 
 #[test]
 fn palette_disabled_row_says_why() {
-    let mut h = Harness::builder().with_size([1440.0, 900.0]).build_eframe(|cc| BrickMotionApp::new_for_test_cc(cc, None));
+    let mut h = Harness::builder().with_size([1440.0, 900.0]).build_eframe(|cc| {
+        let mut app = BrickMotionApp::new_for_test_cc(cc, None);
+        app.new_document();
+        app
+    });
     h.run();
     h.get_by_label("Search commands").click();
     h.run_steps(2);

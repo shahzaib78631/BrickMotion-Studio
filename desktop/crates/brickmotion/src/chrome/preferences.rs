@@ -140,7 +140,7 @@ fn page(ui: &mut Ui, app: &mut BrickMotionApp, t: &Theme) {
         while i < rows.len() && rows[i].id != "theme" && rows[i].section == row.section {
             i += 1;
         }
-        widgets::inset_group(ui, |ui| {
+        widgets::flush_group(ui, |ui| {
             for (k, r) in rows[start..i].iter().enumerate() {
                 if k > 0 {
                     widgets::hairline(ui);

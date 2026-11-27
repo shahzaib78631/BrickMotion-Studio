@@ -611,6 +611,12 @@ impl BrickMotionApp {
         self.request(Pending::Open(path));
     }
 
+    /// True while Home stands in for the editor: no document, and none on its way.
+    /// The Render Queue outlives documents, so while it is open the (empty) editor shows it.
+    pub fn shows_home(&self) -> bool {
+        !self.has_document && self.opening().is_none() && !chrome::queue_panel::is_open(self)
+    }
+
     /// The file being opened, if any.
     pub fn opening(&self) -> Option<&Path> {
         self.loader.loading().or(self.startup.as_deref())
@@ -733,6 +739,8 @@ impl BrickMotionApp {
             }
             "edit.select_all" => s.select_all(),
             "edit.select_none" => s.select_none(),
+            "edit.select_same_part" => crate::edit::select_same(s, crate::edit::Same::Part),
+            "edit.select_same_colour" => crate::edit::select_same(s, crate::edit::Same::Colour),
             "edit.hide" => {
                 let sel = s.selection();
                 s.hide(&sel);
@@ -1211,6 +1219,12 @@ impl BrickMotionApp {
             NameFor::MakeSubmodel => s.make_submodel(&n.pieces, &name),
             NameFor::NewSubmodel => s.new_submodel(&name),
             NameFor::Group => s.set_group(&n.pieces, &name),
+            NameFor::Rename(ref from) => {
+                if *from == name {
+                    return;
+                }
+                s.rename_submodel(from, &name)
+            }
         };
         self.edited(c);
     }
@@ -1396,6 +1410,31 @@ impl BrickMotionApp {
     #[doc(hidden)]
     pub fn dialogs_off(&mut self) {
         self.dialogs = false;
+    }
+
+    /// Model › Import Model Into…: picks a model file and adds it into submodel `into`
+    /// ("" is the open model), as one undo step.
+    pub fn import_model_dialog(&mut self, into: String) {
+        if !self.dialogs {
+            self.dialog_requests.push(DialogRequest { kind: "import_into", suggested: Some(into) });
+            return;
+        }
+        let picked = rfd::FileDialog::new().set_title("Import Model Into").add_filter("LDraw and BrickMotion models", &OPEN_EXTENSIONS).pick_file();
+        if let Some(p) = picked {
+            self.import_model_file(&p, &into);
+        }
+    }
+
+    /// Reads `path` and adds it into submodel `into`; a notice says why when it cannot.
+    pub fn import_model_file(&mut self, path: &Path, into: &str) {
+        match bm::ModelImport::read(path) {
+            Ok(file) => {
+                let s = self.doc.session();
+                let c = s.import_model(&file, into, s.generation());
+                self.edited(c);
+            }
+            Err(why) => crate::notices::push(&mut self.notices, Notice::Warning { title: "Couldn't import the model".into(), detail: why }),
+        }
     }
 
     fn open_dialog(&mut self) {
@@ -1658,7 +1697,11 @@ impl eframe::App for BrickMotionApp {
             chrome::camera_lane::sync(self);
         }
         chrome::titlebar::show(ui, self);
-        chrome::central(ui, self);
+        if self.shows_home() {
+            chrome::home::show(ui, self);
+        } else {
+            chrome::central(ui, self);
+        }
         self.start_startup();
         crate::palette::show(ui, self);
         chrome::swatches::show(ui, self);

@@ -43,7 +43,7 @@ pub fn show(ui: &mut Ui, app: &mut BrickMotionApp) {
             ui.add_space(4.0);
             ui.label(RichText::new("Build brick models and animate how they go together.").size(12.5).color(t.text2));
             ui.add_space(16.0);
-            super::widgets::inset_group(ui, |ui| {
+            super::widgets::flush_group(ui, |ui| {
                 for (i, (k, v)) in lines.iter().enumerate() {
                     if i > 0 {
                         super::widgets::hairline(ui);

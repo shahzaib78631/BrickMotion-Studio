@@ -15,6 +15,7 @@ pub mod motion_panel;
 pub mod naming;
 pub mod preferences;
 pub mod about;
+pub mod home;
 pub mod keys_track;
 pub mod library;
 pub mod export_movie;

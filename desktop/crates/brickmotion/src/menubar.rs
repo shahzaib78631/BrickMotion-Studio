@@ -81,6 +81,8 @@ pub fn menu_model() -> Vec<MenuSection> {
                 Sep,
                 C("edit.select_all"),
                 C("edit.select_none"),
+                C("edit.select_same_part"),
+                C("edit.select_same_colour"),
                 C("edit.hide"),
                 C("edit.show_all"),
             ],
@@ -378,6 +380,8 @@ mod tests {
                 MenuEntry::Separator,
                 MenuEntry::Command("edit.select_all"),
                 MenuEntry::Command("edit.select_none"),
+                MenuEntry::Command("edit.select_same_part"),
+                MenuEntry::Command("edit.select_same_colour"),
                 MenuEntry::Command("edit.hide"),
                 MenuEntry::Command("edit.show_all"),
             ]

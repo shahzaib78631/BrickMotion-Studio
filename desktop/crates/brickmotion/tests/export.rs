@@ -68,8 +68,10 @@ fn row_menu_exports_submodel_project() {
     h.step();
     h.event(egui::Event::PointerButton { pos: row.center(), button: egui::PointerButton::Secondary, pressed: false, modifiers: egui::Modifiers::NONE });
     h.run_steps(3);
-    assert!(h.query_by_label("Export LDraw…").is_some(), "the row menu offers LDraw");
-    h.get_by_label("Export Project…").click();
+    h.get_by_label("Export").hover();
+    h.run_steps(3);
+    assert!(h.query_by_label("LDraw…").is_some(), "the row menu offers LDraw");
+    h.get_by_label("Project…").click();
     h.run_steps(3);
     let req = h.state().dialog_requests.last().cloned().expect("a save panel");
     assert_eq!(req.suggested.as_deref(), Some("helicopter - underside 1.brickmotion"));
@@ -320,9 +322,12 @@ fn row_menu_exports_submodel_video() {
     h.step();
     h.event(egui::Event::PointerButton { pos: row.center(), button: egui::PointerButton::Secondary, pressed: false, modifiers: egui::Modifiers::NONE });
     h.run_steps(3);
-    let items: Vec<String> = h.query_all_by_role(egui::accesskit::Role::Button).filter_map(|n| { use egui_kittest::kittest::NodeT; n.accesskit_node().label() }).filter(|l| l.starts_with("Export ")).collect();
-    assert_eq!(items, ["Export Video…", "Export Project…", "Export LDraw…"], "the approved row menu");
-    h.get_by_label("Export Video…").click();
+    // The approved P3 row menu: Export › Video…, Project…, LDraw….
+    h.get_by_label("Export").hover();
+    h.run_steps(3);
+    let items: Vec<String> = h.query_all_by_role(egui::accesskit::Role::Button).filter_map(|n| { use egui_kittest::kittest::NodeT; n.accesskit_node().label() }).filter(|l| ["Video…", "Project…", "LDraw…"].contains(&l.as_str())).collect();
+    assert_eq!(items, ["Video…", "Project…", "LDraw…"], "the approved row menu");
+    h.get_by_label("Video…").click();
     h.run_steps(3);
     let m = &h.state().movie;
     assert!(m.open);
@@ -701,7 +706,9 @@ fn row_menu_exports_selected_submodels() {
     h.step();
     h.event(egui::Event::PointerButton { pos: tail, button: egui::PointerButton::Secondary, pressed: false, modifiers: egui::Modifiers::NONE });
     h.run_steps(3);
-    h.get_by_label("Export Video…").click();
+    h.get_by_label("Export").hover();
+    h.run_steps(3);
+    h.get_by_label("Video…").click();
     h.run_steps(3);
     let mut titles: Vec<String> = h.state().movie.targets.iter().map(|t| t.title.clone()).collect();
     titles.sort();

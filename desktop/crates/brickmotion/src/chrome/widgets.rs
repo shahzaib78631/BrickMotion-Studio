@@ -58,6 +58,20 @@ pub fn inset_group(ui: &mut Ui, content: impl FnOnce(&mut Ui)) {
         });
 }
 
+/// An inset group that lines up with the text around it (no outer margin), for sheets and Home.
+pub fn flush_group(ui: &mut Ui, content: impl FnOnce(&mut Ui)) {
+    let t = crate::theme::of(ui.ctx());
+    Frame::NONE
+        .fill(t.ink(11))
+        .stroke(Stroke::new(0.5, t.ink(15)))
+        .corner_radius(CornerRadius::same(9))
+        .show(ui, |ui| {
+            ui.set_width(ui.available_width());
+            ui.spacing_mut().item_spacing.y = 0.0;
+            content(ui);
+        });
+}
+
 /// 0.5-px white 7% hairline between rows in an inset group, inset 12 px from the left edge.
 pub fn hairline(ui: &mut Ui) {
     let t = crate::theme::of(ui.ctx());

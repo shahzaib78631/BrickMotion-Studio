@@ -123,6 +123,17 @@ fn p2_screenshots() {
         h.run_steps(6);
         h.render().unwrap().save(out.join(format!("p2-app-{theme}.png"))).unwrap();
         if theme == "dark" || theme == "light" {
+            let mut home = Harness::builder().with_size([1440.0, 900.0]).wgpu().build_eframe(|cc| {
+                let mut app = BrickMotionApp::new_for_test_cc(cc, None);
+                app.dialogs_off();
+                app.recents.add(HELI.into());
+                app
+            });
+            home.run_steps(3);
+            let ctx = home.ctx.clone();
+            home.state_mut().set_theme(&ctx, theme);
+            home.run_steps(4);
+            home.render().unwrap().save(out.join(format!("p2-home-{theme}.png"))).unwrap();
             run(h.state_mut(), "app.settings");
             h.run_steps(3);
             h.get_by_role_and_label(Role::Tab, "Appearance").click();
@@ -138,4 +149,50 @@ fn p2_screenshots() {
             h.render().unwrap().save(out.join(format!("p2-about-{theme}.png"))).unwrap();
         }
     }
+}
+
+#[test]
+fn home_shows_with_no_document_and_new_project_leaves_it() {
+    let mut h = empty_app();
+    assert!(h.state().shows_home());
+    for label in ["Start something", "Recent"] {
+        assert!(h.query_by_label(label).is_some(), "{label}");
+    }
+    // The title bar has its own Open… button, so look for at least one of each.
+    for card in ["New Project", "Open…", "Import Parts List…"] {
+        assert!(h.query_all_by_role_and_label(Role::Button, card).count() >= 1, "{card}");
+    }
+    assert!(h.query_by_label("0 pieces").is_none(), "no piece count on Home");
+    assert!(h.query_by_label("Files you open or save appear here.").is_some(), "empty recents");
+    h.get_by_role_and_label(Role::Button, "New Project").click();
+    h.run_steps(4);
+    assert!(h.state().has_document, "New Project opens an empty model");
+    assert!(!h.state().shows_home());
+}
+
+#[test]
+fn home_lists_the_samples_that_exist() {
+    let found = brickmotion::chrome::home::samples();
+    assert!(found.iter().any(|(t, p)| *t == "Helicopter" && p.is_file()), "{found:?}");
+    assert!(found.iter().all(|(_, p)| p.is_file()), "a folder sample opens a model file");
+    let h = empty_app();
+    assert!(h.query_by_role_and_label(Role::Button, "Helicopter").is_some());
+}
+
+#[test]
+fn home_recent_row_opens_the_file() {
+    const HELI: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../../samples/helicopter/helicopter.mpd");
+    let mut h = Harness::builder().with_size([1440.0, 900.0]).build_eframe(|cc| {
+        let mut app = BrickMotionApp::new_for_test_cc(cc, None);
+        app.dialogs_off();
+        app.recents.add(std::path::PathBuf::from(HELI));
+        app
+    });
+    h.run_steps(3);
+    // The Recent row and the sample card both say "helicopter"; the row shows the file name.
+    h.get_by_role_and_label(Role::Button, "helicopter.mpd").click();
+    h.run_steps(3);
+    h.state_mut().wait_loaded();
+    h.run_steps(3);
+    assert!(h.state().has_document, "the recent file opened");
 }
