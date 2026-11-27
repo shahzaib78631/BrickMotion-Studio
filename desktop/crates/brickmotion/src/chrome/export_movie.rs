@@ -8,7 +8,7 @@ use bm::export::{
     FrameShape, LogoCorner, MovieCamera, MovieChoice, MovieQuality, MovieResolution, MovieSource, VideoTarget, ViewAngles,
     movie_allows_track, movie_arguments, movie_size, movie_summary,
 };
-use egui::{Color32, CornerRadius, FontId, Sense, Stroke, StrokeKind, Ui, WidgetInfo, pos2, vec2};
+use egui::{CornerRadius, FontId, Sense, Stroke, StrokeKind, Ui, WidgetInfo, pos2, vec2};
 
 use super::float_panel::{self, Head, PanelKind};
 use super::widgets::{accent_button, footnote, hairline, inset_group, page_footer, popup_row, secondary_button, segmented, switch_row};
@@ -401,7 +401,7 @@ fn result(ui: &mut Ui, t: &Theme, title: &str, detail: &str, progress: Option<(u
         ui.add(egui::Label::new(egui::RichText::new(detail).size(11.5).color(t.text2)).wrap());
         if let Some((done, total)) = progress {
             let (bar, _) = ui.allocate_exact_size(vec2(ui.available_width(), 4.0), Sense::hover());
-            ui.painter().rect_filled(bar, CornerRadius::same(2), Color32::from_white_alpha(18));
+            ui.painter().rect_filled(bar, CornerRadius::same(2), t.ink(18));
             let mut fill = bar;
             fill.set_width(bar.width() * done as f32 / total as f32);
             ui.painter().rect_filled(fill, CornerRadius::same(2), t.accent);
@@ -489,9 +489,9 @@ pub(crate) fn shape_tile(ui: &mut Ui, t: &Theme, shape: FrameShape, selected: bo
     let label = format!("{}, {}", shape.title(), shape.ratio());
     resp.widget_info(|| WidgetInfo::selected(egui::Role::Button, true, selected, &label));
     let p = ui.painter();
-    let fill = if selected { t.accent_bg() } else { Color32::from_white_alpha(9) };
+    let fill = if selected { t.accent_bg() } else { t.ink(9) };
     p.rect_filled(r, CornerRadius::same(8), fill);
-    let edge = if selected { Stroke::new(1.5, t.accent) } else { Stroke::new(0.5, Color32::from_white_alpha(30)) };
+    let edge = if selected { Stroke::new(1.5, t.accent) } else { Stroke::new(0.5, t.ink(30)) };
     p.rect_stroke(r, CornerRadius::same(8), edge, StrokeKind::Inside);
     let (w, h) = movie_size(shape, MovieResolution::Standard);
     let aspect = w as f32 / h as f32;
@@ -621,7 +621,7 @@ fn logo_row(ui: &mut Ui, app: &mut BrickMotionApp, t: &Theme) {
                 app.movie.logo_texture = Some((file.clone(), tex));
             }
             if let Some((_, Some(tex))) = &app.movie.logo_texture {
-                let tint = if app.prefs.video_logo_enabled { Color32::WHITE } else { Color32::from_white_alpha(100) };
+                let tint = if app.prefs.video_logo_enabled { t.text1 } else { t.ink(100) };
                 ui.add(egui::Image::new(tex).max_size(vec2(34.0, 20.0)).tint(tint));
             }
             if popup_row(ui, t, "movie-logo", "Logo", shown, &options, &mut i, true) {

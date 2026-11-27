@@ -13,6 +13,8 @@ pub mod joints;
 pub mod keys_panel;
 pub mod motion_panel;
 pub mod naming;
+pub mod preferences;
+pub mod about;
 pub mod keys_track;
 pub mod library;
 pub mod export_movie;
@@ -29,6 +31,7 @@ pub mod parts_lane;
 pub mod properties;
 pub mod replace;
 pub mod ribbon;
+pub mod sheet;
 pub mod sound;
 pub mod staging;
 pub mod steps;
@@ -210,7 +213,7 @@ pub fn float_frame(t: &Theme) -> Frame {
         .fill(t.float_fill())
         .stroke(Stroke::new(1.0, t.border2))
         .corner_radius(CornerRadius::same(10))
-        .shadow(Shadow { offset: [0, 10], blur: 30, spread: 0, color: Color32::from_black_alpha(90) })
+        .shadow(Shadow { offset: [0, 10], blur: 30, spread: 0, color: t.shade(90) })
 }
 
 /// A square icon button. Disabled buttons stay visible, dimmed, and keep their hover text.

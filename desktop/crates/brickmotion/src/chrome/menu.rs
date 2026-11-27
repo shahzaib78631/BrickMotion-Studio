@@ -13,7 +13,6 @@ const MIN_W: f32 = 180.0;
 const MAX_W: f32 = 268.0;
 const PAD_X: f32 = 8.0;
 const ICON_SLOT: f32 = 22.0;
-const DANGER: Color32 = Color32::from_rgb(0xe5, 0x48, 0x4d);
 
 /// Applies consistent compact menu width and tight row spacing inside a popup or context menu.
 pub fn prepare(ui: &mut Ui) {
@@ -58,12 +57,12 @@ pub fn section(ui: &mut Ui, t: &Theme, label: &str) {
 }
 
 /// A crisp hairline divider between menu groups.
-pub fn separator(ui: &mut Ui, _t: &Theme) {
+pub fn separator(ui: &mut Ui, t: &Theme) {
     let (r, _) = ui.allocate_exact_size(vec2(row_width(ui), 8.0), Sense::hover());
     ui.painter().hline(
         (r.left() + 4.0)..=(r.right() - 4.0),
         r.center().y,
-        Stroke::new(0.75, Color32::from_white_alpha(18)),
+        Stroke::new(0.75, t.ink(18)),
     );
 }
 
@@ -246,9 +245,9 @@ fn draw_row(ui: &mut Ui, t: &Theme, s: RowStyle<'_>) -> Response {
     let hot = s.enabled && (s.force_hot || resp.hovered() || resp.has_focus());
     if hot {
         let fill = if s.destructive {
-            Color32::from_rgba_unmultiplied(DANGER.r(), DANGER.g(), DANGER.b(), 34)
+            Theme::alpha(t.danger, 34)
         } else {
-            Color32::from_white_alpha(20)
+            t.ink(20)
         };
         ui.painter().rect_filled(r, CornerRadius::same(6), fill);
     }
@@ -256,16 +255,14 @@ fn draw_row(ui: &mut Ui, t: &Theme, s: RowStyle<'_>) -> Response {
     let text_color = if !s.enabled {
         t.text3
     } else if s.destructive {
-        DANGER
-    } else if hot || selected {
-        t.text1
+        t.danger
     } else {
-        Color32::from_rgb(0xd8, 0xdb, 0xe1)
+        t.text1
     };
     let icon_color = if !s.enabled {
         t.text3
     } else if s.destructive {
-        DANGER
+        t.danger
     } else if hot {
         t.text1
     } else {
@@ -327,14 +324,14 @@ fn paint_check(painter: &egui::Painter, c: Pos2, color: Color32) {
 
 fn paint_toggle(painter: &egui::Painter, t: &Theme, r: Rect, on: bool, enabled: bool) {
     let track = if !enabled {
-        Color32::from_white_alpha(14)
+        t.ink(14)
     } else if on {
         t.accent
     } else {
-        Color32::from_white_alpha(30)
+        t.ink(30)
     };
     painter.rect_filled(r, CornerRadius::same(7), track);
     let knob_x = if on { r.right() - 7.0 } else { r.left() + 7.0 };
-    let knob_col = if enabled { Color32::WHITE } else { t.text3 };
+    let knob_col = if enabled { t.knob } else { t.text3 };
     painter.circle_filled(pos2(knob_x, r.center().y), 5.0, knob_col);
 }

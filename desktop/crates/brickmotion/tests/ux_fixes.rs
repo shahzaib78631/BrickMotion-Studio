@@ -522,9 +522,11 @@ fn no_coming_soon_placeholders() {
     for c in brickmotion::commands::registry() {
         assert!(!c.tip.to_lowercase().contains("coming soon"), "{} still says coming soon", c.id);
     }
-    for id in ["model.submodel", "app.settings"] {
-        assert!(brickmotion::commands::find(id).is_none(), "{id} is registered but not built");
-    }
+    assert!(brickmotion::commands::find("model.submodel").is_none(), "model.submodel is registered but not built");
+    // Settings is built now (BrickMotion › Settings…, ⌘,): it must open a real window.
+    let mut app = BrickMotionApp::new_for_test(None);
+    assert!(run(&mut app, "app.settings"));
+    assert!(app.settings.open, "Settings… opens the Settings window");
     let h = build_heli();
     assert!(h.query_by_label("Preferences").is_none(), "disabled Preferences button");
     assert!(h.query_by_label("Help").is_none(), "disabled Help button");

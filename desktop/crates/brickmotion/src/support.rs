@@ -124,6 +124,29 @@ pub struct Prefs {
     /// The frame shape last chosen for a movie ("" before the first), Staging's "From Output".
     #[serde(default)]
     pub movie_frame_shape: String,
+    /// A theme id from the catalogue, or "system" to follow the Mac.
+    #[serde(default = "default_theme")]
+    pub theme: String,
+    /// What the viewport draws behind the model: "theme", "studio" or "black".
+    #[serde(default = "default_background")]
+    pub viewport_background: String,
+    /// Building defaults, kept between launches.
+    #[serde(default)]
+    pub pick_pieces: bool,
+    #[serde(default = "default_true")]
+    pub collision: bool,
+    #[serde(default)]
+    pub smart_joints: bool,
+    #[serde(default)]
+    pub local_axes: bool,
+}
+
+fn default_theme() -> String {
+    "dark".to_owned()
+}
+
+fn default_background() -> String {
+    "theme".to_owned()
 }
 
 fn default_corner() -> String {
@@ -141,6 +164,12 @@ impl Default for Prefs {
             video_logo_enabled: false,
             video_logo_corner: default_corner(),
             movie_frame_shape: String::new(),
+            theme: default_theme(),
+            viewport_background: default_background(),
+            pick_pieces: false,
+            collision: true,
+            smart_joints: false,
+            local_axes: false,
         }
     }
 }

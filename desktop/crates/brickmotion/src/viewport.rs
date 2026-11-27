@@ -178,6 +178,8 @@ pub struct ViewportWidget {
     /// This frame's viewport response, for the chrome's context menu.
     pub(crate) response: Option<egui::Response>,
     last_auto_plan: Option<bool>,
+    /// The background changed since the engine last drew with it.
+    background_dirty: bool,
     last_plan_poll: Option<std::time::Instant>,
 }
 
@@ -185,6 +187,13 @@ impl ViewportWidget {
     /// The last frame the viewport drew (empty before the first).
     pub fn last_frame(&self) -> &bm::Frame {
         &self.frame
+    }
+
+    /// Changes what the viewport draws behind the model, from the next frame on.
+    pub fn set_background(&mut self, background: Color32) {
+        let c = |v: u8| f64::from(v) / 255.0;
+        self.background = [c(background.r()), c(background.g()), c(background.b())];
+        self.background_dirty = true;
     }
 
     pub fn new(background: Color32) -> Self {
@@ -248,10 +257,10 @@ impl ViewportWidget {
             self.gizmo = None;
             self.drag = None;
             let text = no_view_text(empty, bm::metal_available());
-            let hint = egui::Label::new(egui::RichText::new(text).size(13.0).color(Color32::from_gray(0x8a)));
+            let hint = egui::Label::new(egui::RichText::new(text).size(13.0).color(theme.text2));
             ui.put(Rect::from_center_size(rect.center(), egui::vec2(rect.width(), 24.0)), hint);
             if empty {
-                let k = egui::RichText::new("⌘O").size(11.0).color(Color32::from_gray(0x6c));
+                let k = egui::RichText::new("⌘O").size(11.0).color(theme.text3);
                 ui.put(Rect::from_center_size(rect.center() + egui::vec2(0.0, 22.0), egui::vec2(60.0, 18.0)), egui::Label::new(k));
             }
             return;
@@ -266,8 +275,9 @@ impl ViewportWidget {
         let effective_auto_plan = auto_plan && !is_dragging;
         {
             let vp = doc.viewport().unwrap();
-            if fresh {
+            if fresh || self.background_dirty {
                 vp.set_background(self.background);
+                self.background_dirty = false;
                 self.last_size = None;
                 self.last_auto_plan = None;
             }
@@ -745,7 +755,7 @@ impl ViewportWidget {
         }
         if let Some(t) = &self.texture {
             let uv = Rect::from_min_max(Pos2::ZERO, pos2(1.0, 1.0));
-            ui.painter().image(t.id(), rect, uv, Color32::WHITE);
+            ui.painter().image(t.id(), rect, uv, crate::theme::NO_TINT);
         }
 
         // Refresh and paint the gizmo after any camera/selection change this frame.
@@ -767,7 +777,7 @@ impl ViewportWidget {
                 .map(|p| shape.hit(to_bm(p), 8.0))
                 .unwrap_or(Handle::None);
             let active = self.drag.as_ref().map(|d| d.handle).unwrap_or(Handle::None);
-            gizmo::paint(ui.painter(), rect, &shape, active, self.hovered);
+            gizmo::paint(ui.painter(), theme, rect, &shape, active, self.hovered);
             if let (Some(d), Some(ptr)) = (&self.drag, latest_pos) {
                 let label = match kind {
                     GizmoKind::Move => gizmo::format_move(d.moved()),

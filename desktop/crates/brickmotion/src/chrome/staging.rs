@@ -1,6 +1,6 @@
 //! Build Staging Properties page (m4-rulings.md: v3 without the preview).
 use bm::settings::{GROUPS, LAYOUTS, MATCHES, SIDES, StagingSettings};
-use egui::{Color32, CornerRadius, Frame, Margin, Rect, RichText, Sense, Stroke, Ui, WidgetInfo, pos2, vec2};
+use egui::{CornerRadius, Frame, Margin, Rect, RichText, Sense, Stroke, Ui, WidgetInfo, pos2, vec2};
 
 use super::widgets::{
     SliderEvent, accent_button, footnote, hairline, inset_group, page_footer, parse_number, popup_row,
@@ -360,16 +360,16 @@ fn layout_tile(ui: &mut Ui, t: &Theme, id: &str, title: &str, selected: bool, si
     let (rect, resp) = ui.allocate_exact_size(size, Sense::click());
     resp.widget_info(|| WidgetInfo::selected(egui::Role::RadioButton, true, selected, title));
     let fill = if selected {
-        Color32::from_rgba_unmultiplied(t.accent.r(), t.accent.g(), t.accent.b(), 36)
+        t.accent_a(36)
     } else if resp.hovered() {
-        Color32::from_white_alpha(23)
+        t.ink(23)
     } else {
-        Color32::from_white_alpha(11)
+        t.ink(11)
     };
     let stroke = if selected {
         Stroke::new(2.0, t.accent)
     } else {
-        Stroke::new(0.5, Color32::from_white_alpha(15))
+        Stroke::new(0.5, t.ink(15))
     };
     ui.painter().rect(rect, CornerRadius::same(7), fill, stroke, egui::StrokeKind::Inside);
 
@@ -378,9 +378,9 @@ fn layout_tile(ui: &mut Ui, t: &Theme, id: &str, title: &str, selected: bool, si
     let sx = inner.width() / 25.0;
     let sy = inner.height() / 15.0;
     let block_fill = if selected {
-        Color32::from_rgba_unmultiplied(t.accent.r(), t.accent.g(), t.accent.b(), 130)
+        t.accent_a(130)
     } else {
-        Color32::from_white_alpha(36)
+        t.ink(36)
     };
     for &(x, y, w, h) in layout_rects(id) {
         let r = Rect::from_min_size(pos2(inner.left() + x * sx, inner.top() + y * sy), vec2(w * sx, h * sy));

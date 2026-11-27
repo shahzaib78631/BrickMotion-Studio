@@ -1,5 +1,5 @@
 //! The notice stack, bottom right of the viewport.
-use egui::{Align2, Area, Color32, Id, Margin, Order, Rect, RichText, Stroke, Ui, vec2};
+use egui::{Align2, Area, Id, Margin, Order, Rect, RichText, Stroke, Ui, vec2};
 
 use super::{float_frame, icon_button};
 use crate::icons::{self, Icon};
@@ -22,8 +22,8 @@ pub fn show(ui: &mut Ui, app: &mut BrickMotionApp, area: Rect) {
             ui.spacing_mut().item_spacing.y = 8.0;
             for (k, n) in app.notices.iter().enumerate() {
                 let (icon, tint) = match n {
-                    Notice::Error { .. } => (Icon::Close, Color32::from_rgb(0xff, 0x6b, 0x6b)),
-                    Notice::Warning { .. } => (Icon::Help, Color32::from_rgb(0xfe, 0xbc, 0x2e)),
+                    Notice::Error { .. } => (Icon::Close, t.danger),
+                    Notice::Warning { .. } => (Icon::Help, t.warning),
                 };
                 float_frame(&t).corner_radius(8).inner_margin(Margin { left: 12, right: 6, top: 10, bottom: 10 }).show(ui, |ui| {
                     ui.set_width(WIDTH - 18.0);

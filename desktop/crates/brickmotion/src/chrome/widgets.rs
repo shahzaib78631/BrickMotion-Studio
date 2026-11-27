@@ -1,7 +1,7 @@
 //! macOS inset-form widgets shared by the Properties settings pages.
 //! Every slider commits ONCE on release, Return, or focus loss, and Esc reverts cleanly.
 use egui::{
-    Align2, Color32, CornerRadius, FontId, Frame, Key, Margin, Modifiers, Rect, Response, RichText, Sense, Stroke,
+    Align2, CornerRadius, FontId, Frame, Key, Margin, Modifiers, Rect, Response, RichText, Sense, Stroke,
     Ui, WidgetInfo, pos2, vec2,
 };
 
@@ -45,10 +45,11 @@ pub fn section_header(ui: &mut Ui, t: &Theme, title: &str, right: Option<&str>) 
 
 /// A macOS inset form group: 12 px outer margin, radius 9, white 4.5% fill, 0.5 px white 6% edge.
 pub fn inset_group(ui: &mut Ui, content: impl FnOnce(&mut Ui)) {
+    let t = crate::theme::of(ui.ctx());
     Frame::NONE
         .outer_margin(Margin::symmetric(12, 0))
-        .fill(Color32::from_white_alpha(11))
-        .stroke(Stroke::new(0.5, Color32::from_white_alpha(15)))
+        .fill(t.ink(11))
+        .stroke(Stroke::new(0.5, t.ink(15)))
         .corner_radius(CornerRadius::same(9))
         .show(ui, |ui| {
             ui.set_width(ui.available_width());
@@ -59,11 +60,12 @@ pub fn inset_group(ui: &mut Ui, content: impl FnOnce(&mut Ui)) {
 
 /// 0.5-px white 7% hairline between rows in an inset group, inset 12 px from the left edge.
 pub fn hairline(ui: &mut Ui) {
+    let t = crate::theme::of(ui.ctx());
     let (rect, _) = ui.allocate_exact_size(vec2(ui.available_width(), 1.0), Sense::hover());
     ui.painter().hline(
         (rect.left() + 12.0)..=rect.right(),
         rect.center().y,
-        Stroke::new(0.5, Color32::from_white_alpha(18)),
+        Stroke::new(0.5, t.ink(18)),
     );
 }
 
@@ -138,7 +140,7 @@ pub fn segmented(
     let mut changed = false;
     let total_w = ui.available_width();
     let (rect, _) = ui.allocate_exact_size(vec2(total_w, 24.0), Sense::hover());
-    let bg = if enabled { Color32::from_white_alpha(18) } else { Color32::from_white_alpha(10) };
+    let bg = if enabled { t.ink(18) } else { t.ink(10) };
     ui.painter().rect_filled(rect, 7.0, bg);
     let inner = rect.shrink(2.0);
     let seg_w = inner.width() / options.len() as f32;
@@ -149,11 +151,11 @@ pub fn segmented(
         let is_on = *selected == i;
         resp.widget_info(|| WidgetInfo::selected(egui::Role::RadioButton, enabled, is_on, label));
         if is_on {
-            let fill = if enabled { Color32::from_white_alpha(44) } else { Color32::from_white_alpha(22) };
+            let fill = if enabled { t.ink(44) } else { t.ink(22) };
             ui.painter().rect_filled(seg, 5.5, fill);
-            ui.painter().rect_stroke(seg, 5.5, Stroke::new(0.5, Color32::from_white_alpha(20)), egui::StrokeKind::Inside);
+            ui.painter().rect_stroke(seg, 5.5, Stroke::new(0.5, t.ink(20)), egui::StrokeKind::Inside);
         } else if enabled && resp.hovered() {
-            ui.painter().rect_filled(seg, 5.5, Color32::from_white_alpha(12));
+            ui.painter().rect_filled(seg, 5.5, t.ink(12));
         }
         let fg = if !enabled {
             t.text3
@@ -191,7 +193,7 @@ pub fn popup_row(
     );
     resp.widget_info(|| WidgetInfo::labeled(egui::Role::ComboBox, enabled, label));
     if enabled && resp.hovered() {
-        ui.painter().rect_filled(rect, 0.0, Color32::from_white_alpha(8));
+        ui.painter().rect_filled(rect, 0.0, t.ink(8));
     }
     let y = rect.center().y;
     let label_fg = if enabled { t.text1 } else { t.text3 };
@@ -233,15 +235,15 @@ pub fn pill_switch(ui: &mut Ui, t: &Theme, label: &str, on: &mut bool, enabled: 
     let (rect, resp) = ui.allocate_exact_size(vec2(28.0, 16.0), if enabled { Sense::click() } else { Sense::hover() });
     resp.widget_info(|| WidgetInfo::selected(egui::Role::Switch, enabled, *on, label));
     let track = if *on {
-        if enabled { t.accent } else { Color32::from_rgba_unmultiplied(t.accent.r(), t.accent.g(), t.accent.b(), 100) }
+        if enabled { t.accent } else { t.accent_a(100) }
     } else if enabled {
-        Color32::from_white_alpha(41)
+        t.ink(41)
     } else {
-        Color32::from_white_alpha(22)
+        t.ink(22)
     };
     ui.painter().rect_filled(rect, 8.0, track);
     let cx = if *on { rect.right() - 8.0 } else { rect.left() + 8.0 };
-    let thumb = if enabled { Color32::WHITE } else { Color32::from_white_alpha(150) };
+    let thumb = if enabled { t.knob } else { t.ink(150) };
     ui.painter().circle_filled(pos2(cx, rect.center().y), 6.5, thumb);
     if enabled && resp.clicked() {
         *on = !*on;
@@ -489,26 +491,26 @@ pub fn slider_row_with(
         let p = ui.painter_at(rect);
         let radius = CornerRadius::same(10);
         let hovered = enabled && (resp.hovered() || st.dragging);
-        p.rect_filled(rect, radius, Color32::from_white_alpha(if hovered { 19 } else { 14 }));
+        p.rect_filled(rect, radius, t.ink(if hovered { 19 } else { 14 }));
         let frac = ((*value - *range.start()) / span).clamp(0.0, 1.0) as f32;
         let fill_w = frac * rect.width();
         let fill = if !enabled {
-            Color32::from_white_alpha(12)
+            t.ink(12)
         } else if st.dragging {
-            Color32::from_rgba_unmultiplied(t.accent.r(), t.accent.g(), t.accent.b(), 74)
+            t.accent_a(74)
         } else if look.inherited {
-            Color32::from_white_alpha(15)
+            t.ink(15)
         } else {
-            Color32::from_white_alpha(28)
+            t.ink(28)
         };
         if fill_w > 1.0 {
             let right = (rect.left() + fill_w.max(14.0)).min(rect.right());
             p.rect_filled(Rect::from_min_max(rect.min, pos2(right, rect.bottom())), radius, fill);
         }
         let edge_stroke = if st.dragging {
-            Stroke::new(1.0, Color32::from_rgba_unmultiplied(t.accent.r(), t.accent.g(), t.accent.b(), 140))
+            Stroke::new(1.0, t.accent_a(140))
         } else if hovered {
-            Stroke::new(0.5, Color32::from_white_alpha(28))
+            Stroke::new(0.5, t.ink(28))
         } else {
             Stroke::NONE
         };
@@ -518,11 +520,11 @@ pub fn slider_row_with(
         // Smooth indicator bar inside the fill edge with zero jump across small values.
         let mark_x = (rect.left() + fill_w - 6.0).clamp(rect.left() + 6.0, rect.right() - 7.0);
         let mark = if !enabled || look.inherited {
-            Color32::from_white_alpha(120)
+            t.ink(120)
         } else if st.dragging {
-            Color32::WHITE
+            t.knob
         } else {
-            Color32::from_rgb(0xe8, 0xea, 0xed)
+            t.text1
         };
         p.rect_filled(Rect::from_center_size(pos2(mark_x, rect.center().y), vec2(3.0, 18.0)), 1.5, mark);
         let lfg = if enabled { t.text1 } else { t.text3 };
@@ -552,7 +554,7 @@ pub fn parse_number(s: &str) -> Option<f64> {
 /// Helper to render a footer bar pinned at the bottom of a settings page.
 pub fn page_footer(ui: &mut Ui, t: &Theme, content: impl FnOnce(&mut Ui)) {
     let r = ui.min_rect();
-    ui.painter().hline(r.x_range(), ui.cursor().top(), Stroke::new(0.5, Color32::from_white_alpha(18)));
+    ui.painter().hline(r.x_range(), ui.cursor().top(), Stroke::new(0.5, t.ink(18)));
     Frame::NONE
         .inner_margin(Margin::symmetric(12, 10))
         .show(ui, |ui| {
@@ -566,8 +568,8 @@ pub fn page_footer(ui: &mut Ui, t: &Theme, content: impl FnOnce(&mut Ui)) {
 /// Secondary footer button (subtle surface fill).
 pub fn secondary_button(ui: &mut Ui, t: &Theme, label: &str, enabled: bool) -> Response {
     let btn = egui::Button::new(RichText::new(label).size(12.0).color(if enabled { t.text1 } else { t.text3 }))
-        .fill(Color32::from_white_alpha(if enabled { 18 } else { 8 }))
-        .stroke(Stroke::new(0.5, Color32::from_white_alpha(20)))
+        .fill(t.ink(if enabled { 18 } else { 8 }))
+        .stroke(Stroke::new(0.5, t.ink(20)))
         .corner_radius(CornerRadius::same(6))
         .min_size(vec2(0.0, 26.0));
     ui.add_enabled(enabled, btn)
@@ -578,9 +580,9 @@ pub fn accent_button(ui: &mut Ui, t: &Theme, label: &str, enabled: bool) -> Resp
     let fill = if enabled {
         t.accent
     } else {
-        Color32::from_rgba_unmultiplied(t.accent.r(), t.accent.g(), t.accent.b(), 80)
+        t.accent_a(80)
     };
-    let fg = if enabled { Color32::WHITE } else { Color32::from_white_alpha(140) };
+    let fg = if enabled { t.on_accent } else { t.ink(140) };
     let btn = egui::Button::new(RichText::new(label).size(12.0).strong().color(fg))
         .fill(fill)
         .stroke(Stroke::NONE)

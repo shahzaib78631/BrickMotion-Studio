@@ -21,7 +21,7 @@ pub fn show(ui: &mut Ui, app: &mut BrickMotionApp, area: Rect) {
         .constrain_to(area)
         .show(ui.ctx(), |ui| {
             Frame::NONE
-                .fill(egui::Color32::from_rgba_unmultiplied(0x1a, 0x1b, 0x1f, 230))
+                .fill(crate::theme::Theme::alpha(t.bg1, 230))
                 .stroke(Stroke::new(1.0, t.border))
                 .corner_radius(10)
                 .inner_margin(Margin::same(4))
@@ -186,7 +186,7 @@ pub fn show(ui: &mut Ui, app: &mut BrickMotionApp, area: Rect) {
         let status_color = match p.state {
             bm::placement::PlacementState::Snapped => t.accent,
             bm::placement::PlacementState::Blocked | bm::placement::PlacementState::Unavailable => {
-                egui::Color32::from_rgb(0xe5, 0x48, 0x4d)
+                t.danger
             }
             _ => t.text1,
         };
@@ -277,7 +277,7 @@ fn recording_chip(ui: &mut Ui, app: &mut BrickMotionApp, area: Rect) {
                 .show(ui, |ui| {
                     ui.horizontal(|ui| {
                         let (dot, _) = ui.allocate_exact_size(vec2(8.0, 16.0), Sense::hover());
-                        ui.painter().circle_filled(dot.center(), 4.0, egui::Color32::from_rgb(255, 69, 58));
+                        ui.painter().circle_filled(dot.center(), 4.0, t.danger);
                         let clock = crate::recording::clock(seconds);
                         ui.label(RichText::new(&clock).monospace().size(11.5).color(t.text1));
                         let r = ui.add(egui::Button::new(RichText::new("Stop").size(11.5).color(t.text1)).corner_radius(5));

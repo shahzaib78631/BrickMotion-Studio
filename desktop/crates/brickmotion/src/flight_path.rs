@@ -2,7 +2,7 @@
 //! `ViewportView.beginPathEdit`): a 2-px accent line with an 8-px dot per key and an 11-px dot in
 //! the playhead colour at the playhead. Drag a dot to reshape the flight (one undo step), double-click the line to add a
 //! point there, and ⌫ deletes the picked dot (never the first or the last).
-use egui::{Align2, Color32, FontId, Pos2, Rect, Stroke, Ui, pos2, vec2};
+use egui::{Align2, FontId, Pos2, Rect, Stroke, Ui, pos2, vec2};
 
 use crate::BrickMotionApp;
 use crate::flights::PathDrag;
@@ -239,7 +239,7 @@ pub fn show(ui: &Ui, app: &mut BrickMotionApp) {
         if k.frame == playhead {
             playhead_pos = Some(p);
         } else {
-            painter.circle(p, 4.0, Color32::WHITE, Stroke::new(1.5, t.accent));
+            painter.circle(p, 4.0, t.knob, Stroke::new(1.5, t.accent));
         }
         if picked {
             painter.circle_stroke(p, 8.0, Stroke::new(1.2, t.accent));
@@ -266,7 +266,7 @@ pub fn show(ui: &Ui, app: &mut BrickMotionApp) {
             .filter(|p| bounds.contains(*p));
     }
     if let Some(p) = playhead_pos {
-        painter.circle(p, 5.5, t.playhead, Stroke::new(1.5, Color32::WHITE));
+        painter.circle(p, 5.5, t.playhead, Stroke::new(1.5, t.knob));
     }
 
     // The hint sits low in the view, above the floating view bar (and above the floating timeline in Animate).

@@ -277,7 +277,7 @@ fn project(ui: &mut Ui, app: &mut BrickMotionApp, snap: &bm::Snapshot, run: &mut
 fn piece(ui: &mut Ui, app: &mut BrickMotionApp, p: &bm::PieceInfo, run: &mut Option<&'static str>) {
     let t = app.theme;
     let colors = app.colors();
-    let swatch = colors.iter().find(|c| c.code == p.color).map(|c| Color32::from_rgb(c.rgb[0], c.rgb[1], c.rgb[2]));
+    let swatch = colors.iter().find(|c| c.code == p.color).map(|c| Color32::from_rgb(c.rgb[0], c.rgb[1], c.rgb[2])); // data colour
     section(ui, "Piece", |ui| {
         ui.label(RichText::new(&p.description).strong().color(t.text1));
         ui.horizontal(|ui| {
@@ -335,7 +335,7 @@ fn many(ui: &mut Ui, app: &mut BrickMotionApp, snap: &bm::Snapshot) {
     let colors = app.colors();
     let first_code = snap.described.first().map(|p| p.color);
     let same_color = first_code.filter(|&code| snap.described.iter().all(|p| p.color == code));
-    let swatch = same_color.and_then(|code| colors.iter().find(|c| c.code == code)).map(|c| Color32::from_rgb(c.rgb[0], c.rgb[1], c.rgb[2]));
+    let swatch = same_color.and_then(|code| colors.iter().find(|c| c.code == code)).map(|c| Color32::from_rgb(c.rgb[0], c.rgb[1], c.rgb[2])); // data colour
     let color_label = same_color
         .and_then(|_| snap.described.first().map(|p| p.color_name.as_str()))
         .unwrap_or("Mixed");

@@ -110,6 +110,12 @@ pub struct BrickMotionApp {
     pub naming: Option<crate::chrome::naming::Naming>,
     /// Help › Keyboard Shortcuts is showing.
     pub shortcuts_open: bool,
+    /// The group Keyboard Shortcuts shows (an index into its pills).
+    pub shortcuts_tab: usize,
+    /// BrickMotion › Settings… (⌘,).
+    pub settings: chrome::preferences::SettingsWindow,
+    /// BrickMotion › About BrickMotion.
+    pub about_open: bool,
     /// The person agreed to replace this document as it stood; a load arriving while it is
     /// unchanged takes its place without asking again.
     replace_ok: Option<ReplaceOk>,
@@ -225,13 +231,21 @@ impl BrickMotionApp {
     /// As `new`, with the support folder given (tests use a temp folder).
     pub fn new_with_support(cc: &eframe::CreationContext, path: Option<PathBuf>, support: Support) -> Self {
         egui_extras::install_image_loaders(&cc.egui_ctx);
-        apply(&cc.egui_ctx, &Theme::DARK);
-        Self::with_path(path, support)
+        let mut app = Self::with_path(path, support);
+        app.apply_theme(&cc.egui_ctx);
+        app
     }
 
     fn with_path(path: Option<PathBuf>, support: Support) -> Self {
         let theme = Theme::DARK;
         let prefs = Prefs::load(&support);
+        let edit = crate::edit::EditState {
+            pick_scope: if prefs.pick_pieces { crate::edit::PickScope::Pieces } else { crate::edit::PickScope::Submodels },
+            collision: prefs.collision,
+            smart_joints: prefs.smart_joints,
+            local_axes: prefs.local_axes,
+            ..Default::default()
+        };
         let recents = Recents::load(&support);
         let history = crate::history::History::load(&support);
         let queue = crate::render_queue::RenderQueue::load(support.file("render-queue.json"), crate::render_queue::Helpers::locate());
@@ -265,6 +279,9 @@ impl BrickMotionApp {
             confirm: None,
             naming: None,
             shortcuts_open: false,
+            shortcuts_tab: 0,
+            settings: Default::default(),
+            about_open: false,
             replace_ok: None,
             quitting: false,
             quit_after: false,
@@ -274,7 +291,7 @@ impl BrickMotionApp {
             autosave_error: None,
             autosaving: None,
             startup: None,
-            edit: crate::edit::EditState::default(),
+            edit,
             history,
             swatches: chrome::swatches::Swatches::default(),
             previews: crate::previews::Previews::default(),
@@ -799,6 +816,9 @@ impl BrickMotionApp {
                 self.naming = Some(Naming::new(NameFor::Group, name, sel));
             }
             "help.shortcuts" => self.shortcuts_open = true,
+            "app.settings" => self.settings.open = true,
+            "app.about" => self.about_open = true,
+            "help.guide" => crate::help::open_guide(&self.support),
             "model.ungroup" => {
                 let sel = s.selection();
                 let c = s.set_group(&sel, "");
@@ -1130,6 +1150,52 @@ impl BrickMotionApp {
     /// After an edit: a refusal becomes a notice.
     /// Closes the naming sheet: `confirm` makes the submodel or group with the typed name. An
     /// empty name keeps the sheet open.
+    /// Resolves the theme preference ("system" follows the Mac), applies it to `ctx`, and gives the
+    /// viewport the matching background.
+    pub fn apply_theme(&mut self, ctx: &egui::Context) {
+        let system_dark = ctx.system_theme().is_none_or(|t| t == egui::Theme::Dark);
+        self.theme = crate::theme::resolve(&self.prefs.theme, system_dark);
+        apply(ctx, &self.theme);
+        self.viewport.set_background(self.viewport_background());
+    }
+
+    /// What the viewport draws behind the model, from the Viewport › Background preference.
+    pub fn viewport_background(&self) -> egui::Color32 {
+        match self.prefs.viewport_background.as_str() {
+            "studio" => crate::theme::STUDIO_BACKGROUND,
+            "black" => crate::theme::BLACK_BACKGROUND,
+            _ => self.theme.bg1,
+        }
+    }
+
+    /// Chooses a theme by id and keeps it.
+    pub fn set_theme(&mut self, ctx: &egui::Context, id: &str) {
+        self.prefs.theme = id.to_owned();
+        self.apply_theme(ctx);
+        let _ = self.prefs.save(&self.support);
+    }
+
+    /// Keeps the building defaults when they change anywhere in the app, and follows the Mac's
+    /// appearance while the theme is Match System.
+    fn sync_prefs(&mut self, ctx: &egui::Context) {
+        let e = &self.edit;
+        let pick_pieces = e.pick_scope == crate::edit::PickScope::Pieces;
+        let p = &self.prefs;
+        if (p.pick_pieces, p.collision, p.smart_joints, p.local_axes) != (pick_pieces, e.collision, e.smart_joints, e.local_axes) {
+            self.prefs.pick_pieces = pick_pieces;
+            self.prefs.collision = self.edit.collision;
+            self.prefs.smart_joints = self.edit.smart_joints;
+            self.prefs.local_axes = self.edit.local_axes;
+            let _ = self.prefs.save(&self.support);
+        }
+        if self.prefs.theme == crate::theme::MATCH_SYSTEM {
+            let system_dark = ctx.system_theme().is_none_or(|t| t == egui::Theme::Dark);
+            if system_dark != self.theme.dark {
+                self.apply_theme(ctx);
+            }
+        }
+    }
+
     pub fn finish_naming(&mut self, confirm: bool) {
         let Some(n) = self.naming.take() else { return };
         if !confirm {
@@ -1601,6 +1667,9 @@ impl eframe::App for BrickMotionApp {
         crate::flights::show_confirm(ui, self);
         chrome::confirm::show(ui, self);
         chrome::naming::show(ui, self);
+        chrome::preferences::show(ui, self);
+        chrome::about::show(ui, self);
+        self.sync_prefs(ui.ctx());
         self.run_requested();
         self.poll_placement(ui.ctx());
         self.previews.frame_end();

@@ -88,7 +88,7 @@ pub fn show(ui: &mut Ui, app: &mut BrickMotionApp, area: Rect, next_top: &mut f3
 
 fn rgb(v: bm::Vec3) -> Color32 {
     let b = |x: f64| (x.clamp(0.0, 1.0) * 255.0).round() as u8;
-    Color32::from_rgb(b(v.x), b(v.y), b(v.z))
+    Color32::from_rgb(b(v.x), b(v.y), b(v.z)) // data colour
 }
 
 /// One 30-px scene swatch; `None` is the editor's own backdrop.
@@ -103,12 +103,12 @@ fn swatch(ui: &mut Ui, t: &Theme, color: Option<Color32>, selected: bool, title:
         }
         None => {
             // Half light, half dark: it follows the appearance.
-            p.rect_filled(inner, CornerRadius::same(6), Color32::from_gray(232));
+            p.rect_filled(inner, CornerRadius::same(6), Color32::from_gray(232)); // data colour: a light backdrop
             let half = Rect::from_min_max(pos2(inner.center().x, inner.top()), inner.max);
-            p.rect_filled(half, CornerRadius { nw: 0, sw: 0, ne: 6, se: 6 }, Color32::from_gray(38));
+            p.rect_filled(half, CornerRadius { nw: 0, sw: 0, ne: 6, se: 6 }, Color32::from_gray(38)); // data colour: a dark backdrop
         }
     }
-    p.rect_stroke(inner, CornerRadius::same(6), Stroke::new(0.5, Color32::from_white_alpha(30)), StrokeKind::Inside);
+    p.rect_stroke(inner, CornerRadius::same(6), Stroke::new(0.5, t.ink(30)), StrokeKind::Inside);
     if selected {
         p.rect_stroke(r, CornerRadius::same(8), Stroke::new(2.0, t.accent), StrokeKind::Inside);
     } else if resp.hovered() {
@@ -183,7 +183,7 @@ fn body(ui: &mut Ui, app: &mut BrickMotionApp) {
             let on = s == look.shading;
             let (r, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 40.0), Sense::click());
             resp.widget_info(|| WidgetInfo::selected(egui::Role::Button, true, on, shading_title(s)));
-            let fill = if on { t.accent_bg() } else if resp.hovered() { Color32::from_white_alpha(10) } else { Color32::TRANSPARENT };
+            let fill = if on { t.accent_bg() } else if resp.hovered() { t.ink(10) } else { Color32::TRANSPARENT };
             ui.painter().rect_filled(r, CornerRadius::same(8), fill);
             let title_color = if on { t.text1 } else { t.text2 };
             ui.painter().text(pos2(r.left() + 10.0, r.top() + 13.0), Align2::LEFT_CENTER, shading_title(s), FontId::proportional(12.5), title_color);

@@ -152,8 +152,27 @@ fn keyboard_shortcuts_sheet_lists_commands() {
     assert!(run(h.state_mut(), "help.shortcuts"));
     h.run_steps(3);
     h.get_by_label("Keyboard Shortcuts");
-    assert!(h.query_all_by_label("Make Submodel").count() >= 1);
-    h.get_by_label("⌥⌘G");
+    // Grouped under pills; Edit holds the model edits, each key in its own cap.
+    for pill in ["General", "Edit", "View", "Playback"] {
+        // The ribbon behind has a View tab too.
+        assert!(h.query_all_by_role_and_label(egui::accesskit::Role::Button, pill).count() >= 1, "{pill}");
+    }
+    h.get_by_role_and_label(egui::accesskit::Role::Button, "Edit").click();
+    h.run_steps(3);
+    assert_eq!(h.query_all_by_label("Make Submodel").count(), 2, "the ribbon's button and the sheet's row");
+    assert!(h.query_by_label("⌥⌘G").is_none(), "one cap per key");
+    assert!(h.query_all_by_label("⌥").count() >= 1);
+    assert!(h.query_all_by_label("G").count() >= 1);
+    assert!(h.query_by_label("Jump to End").is_none(), "only the chosen group");
+    h.get_by_role_and_label(egui::accesskit::Role::Button, "Playback").click();
+    h.run_steps(3);
+    h.get_by_label("Jump to End");
+    h.get_by_role_and_label(egui::accesskit::Role::Button, "Close").click();
+    h.run_steps(3);
+    assert!(!h.state().shortcuts_open);
+    // Esc closes it too.
+    assert!(run(h.state_mut(), "help.shortcuts"));
+    h.run_steps(3);
     h.key_press(egui::Key::Escape);
     h.run_steps(3);
     assert!(!h.state().shortcuts_open);

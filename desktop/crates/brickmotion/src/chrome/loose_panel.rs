@@ -4,7 +4,7 @@ use std::time::Duration;
 
 use bm::Pose;
 use bm::motion::{Inspection, LoosePieces};
-use egui::{Color32, CornerRadius, Frame, Margin, Rect, RichText, Sense, Stroke, StrokeKind, Ui, WidgetInfo, pos2, vec2};
+use egui::{CornerRadius, Frame, Margin, Rect, RichText, Sense, Stroke, StrokeKind, Ui, WidgetInfo, pos2, vec2};
 
 use super::float_panel::{self, Head, PanelKind};
 use super::icon_button_tip;
@@ -156,11 +156,11 @@ fn checkbox(ui: &mut Ui, t: &Theme, label: &str, checked: bool, enabled: bool) -
         let fill = if enabled {
             t.accent
         } else {
-            Color32::from_rgba_unmultiplied(t.accent.r(), t.accent.g(), t.accent.b(), 100)
+            t.accent_a(100)
         };
         p.rect_filled(rect, r, fill);
         let c = rect.center();
-        let stroke = Stroke::new(1.8, Color32::WHITE);
+        let stroke = Stroke::new(1.8, t.knob);
         p.line_segment([pos2(c.x - 3.8, c.y + 0.2), pos2(c.x - 1.0, c.y + 3.0)], stroke);
         p.line_segment([pos2(c.x - 1.0, c.y + 3.0), pos2(c.x + 4.0, c.y - 2.8)], stroke);
     } else {
@@ -293,7 +293,7 @@ fn body(ui: &mut Ui, app: &mut BrickMotionApp) {
                                         .strong()
                                         .color(if r.waiting { t.text3 } else { t.text1 }),
                                 );
-                                let detail_color = if r.safe || r.waiting { t.text3 } else { t.playhead };
+                                let detail_color = if r.safe || r.waiting { t.text3 } else { t.warning };
                                 ui.label(RichText::new(&r.subtitle).size(11.0).color(detail_color));
                             });
                             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {

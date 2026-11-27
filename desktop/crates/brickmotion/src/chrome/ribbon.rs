@@ -22,8 +22,6 @@ const TABS_H: f32 = 36.0;
 const RIGHT_W: f32 = 240.0;
 /// Space the ribbon takes from the top of the viewport; floating panels start below it.
 pub const SPACE: f32 = TOP + CARD_H;
-const TAB_ON: Color32 = Color32::from_rgb(0x2b, 0x4c, 0x80);
-const TAB_ON_TEXT: Color32 = Color32::from_rgb(0xd6, 0xe4, 0xff);
 
 /// Draws the ribbon over the top of `area` (the viewport).
 pub fn show(ui: &mut Ui, app: &mut BrickMotionApp, area: Rect) {
@@ -72,7 +70,7 @@ fn workspace_button(ui: &mut Ui, app: &mut BrickMotionApp, r: Rect) {
     ui.painter().rect_filled(line, CornerRadius { nw: 0, ne: 0, sw: 3, se: 3 }, t.accent);
     let c = r.center();
     let i = if app.workspace == Workspace::Build { Icon::Brick } else { Icon::Fly };
-    icons::paint(ui, i, Rect::from_center_size(c - vec2(0.0, 20.0), Vec2::splat(20.0)), 20.0, t.playhead);
+    icons::paint(ui, i, Rect::from_center_size(c - vec2(0.0, 20.0), Vec2::splat(20.0)), 20.0, t.accent);
     text(ui, c + vec2(0.0, 2.0), Align2::CENTER_CENTER, app.workspace.name(), 13.0, t.text1);
     let small = text(ui, c + vec2(-6.0, 20.0), Align2::CENTER_CENTER, "Workspace", 10.5, t.text3);
     icons::paint(ui, Icon::Down, Rect::from_center_size(pos2(small.right() + 7.0, small.center().y), Vec2::splat(11.0)), 11.0, t.text3);
@@ -82,23 +80,27 @@ fn workspace_button(ui: &mut Ui, app: &mut BrickMotionApp, r: Rect) {
     }
 }
 
-/// The workspace tabs; the chosen one is a solid blue pill.
+/// The workspace tabs: plain labels, the chosen one in full ink with an accent underline.
 fn tab_row(ui: &mut Ui, app: &mut BrickMotionApp) {
     let t = app.theme;
     ui.horizontal_centered(|ui| {
         ui.add_space(8.0);
-        ui.spacing_mut().item_spacing.x = 2.0;
+        ui.spacing_mut().item_spacing.x = 4.0;
         for &tab in tabs(app.workspace) {
             let on = app.ribbon_tab == tab;
-            let label = RichText::new(tab).color(if on { TAB_ON_TEXT } else { t.text2 });
             let w = ui.painter().layout_no_wrap(tab.to_owned(), FontId::proportional(12.5), t.text1).size().x;
             let resp = ui.add(
-                egui::Button::new(label)
-                    .fill(if on { TAB_ON } else { Color32::TRANSPARENT })
+                egui::Button::new(RichText::new(tab).color(if on { t.text1 } else { t.text2 }))
+                    .fill(Color32::TRANSPARENT)
                     .stroke(Stroke::NONE)
                     .corner_radius(6)
-                    .min_size(vec2(w + 26.0, 26.0)),
+                    .min_size(vec2(w + 20.0, 26.0)),
             );
+            if on {
+                let r = resp.rect;
+                let line = egui::Rect::from_min_max(pos2(r.center().x - w / 2.0, r.bottom() - 1.0), pos2(r.center().x + w / 2.0, r.bottom() + 1.0));
+                ui.painter().rect_filled(line, 1.0, t.accent);
+            }
             let resp = resp.on_hover_cursor(egui::CursorIcon::PointingHand);
             if resp.clicked() {
                 app.ribbon_tab = tab;
@@ -200,7 +202,7 @@ fn tool(ui: &mut Ui, t: &Theme, c: &Command, on: bool, active: bool) -> egui::Re
     let icon_tint = if active {
         t.accent
     } else if on {
-        Color32::from_rgb(0xc9, 0xce, 0xd6)
+        t.text1
     } else {
         t.text3
     };
@@ -247,7 +249,7 @@ fn workspace_switch(ui: &mut Ui, app: &mut BrickMotionApp, wr: Rect) {
         let total = 16.0 + 7.0 + label.size().x;
         let x0 = seg.center().x - total / 2.0;
         let i = if w == Workspace::Build { Icon::Brick } else { Icon::Fly };
-        icons::paint(ui, i, Rect::from_center_size(pos2(x0 + 8.0, seg.center().y), Vec2::splat(16.0)), 16.0, if on { t.playhead } else { t.text2 });
+        icons::paint(ui, i, Rect::from_center_size(pos2(x0 + 8.0, seg.center().y), Vec2::splat(16.0)), 16.0, if on { t.accent } else { t.text2 });
         ui.painter().galley(pos2(x0 + 23.0, seg.center().y - label.size().y / 2.0), label, color);
         if resp.clicked() {
             app.set_workspace(w);

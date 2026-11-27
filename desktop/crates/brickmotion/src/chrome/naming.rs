@@ -3,6 +3,7 @@
 use egui::{Id, Key, Modal, RichText, Ui};
 
 use crate::BrickMotionApp;
+use crate::chrome::sheet;
 use crate::commands::{Shortcut, registry};
 
 /// What the name is for.
@@ -64,37 +65,26 @@ pub fn show(ui: &mut Ui, app: &mut BrickMotionApp) {
     let mut answer = None;
     let title = naming.title();
     let note = naming.note();
-    let modal = Modal::new(Id::unique("naming-sheet")).show(ui.ctx(), |ui| {
-        ui.set_width(340.0);
-        ui.label(RichText::new(title).strong().size(13.0).color(t.text1));
-        ui.add_space(2.0);
-        ui.label(RichText::new(note).size(12.0).color(t.text2));
-        ui.add_space(10.0);
-        let field = egui::TextEdit::singleline(&mut naming.text).desired_width(f32::INFINITY);
-        let out = field.show(ui);
-        if naming.fresh {
-            out.response.request_focus();
-            let all = egui::text::CCursorRange::two(
-                egui::text::CCursor::new(0),
-                egui::text::CCursor::new(naming.text.chars().count()),
-            );
-            let mut state = out.state.clone();
-            state.cursor.set_char_range(Some(all));
-            state.store(ui.ctx(), out.response.id);
-            naming.fresh = false;
+    let modal = Modal::new(Id::unique("naming-sheet")).frame(sheet::frame(&t)).backdrop_color(sheet::backdrop(&t)).show(ui.ctx(), |ui| {
+        ui.set_width(360.0);
+        ui.spacing_mut().item_spacing = egui::vec2(8.0, 0.0);
+        if sheet::header(ui, &t, title) {
+            answer = Some(false);
         }
-        if ui.input(|i| i.key_pressed(Key::Enter)) {
-            answer = Some(true);
-        }
-        ui.add_space(12.0);
-        let ok = !naming.text.trim().is_empty();
-        ui.horizontal(|ui| {
+        sheet::body(ui, |ui| {
+            ui.label(RichText::new(note).size(12.5).color(t.text2));
+            ui.add_space(16.0);
+            sheet::text_field(ui, &t, "Name", &mut naming.text, &mut naming.fresh);
+            if ui.input(|i| i.key_pressed(Key::Enter)) {
+                answer = Some(true);
+            }
+            ui.add_space(20.0);
+            let ok = !naming.text.trim().is_empty();
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                let confirm = egui::Button::new(RichText::new(title).color(egui::Color32::WHITE)).fill(t.accent);
-                if ui.add_enabled(ok, confirm).clicked() {
+                if sheet::button(ui, &t, title, true, ok).clicked() {
                     answer = Some(true);
                 }
-                if ui.button("Cancel").clicked() {
+                if sheet::button(ui, &t, "Cancel", false, true).clicked() {
                     answer = Some(false);
                 }
             });
@@ -109,36 +99,100 @@ pub fn show(ui: &mut Ui, app: &mut BrickMotionApp) {
     }
 }
 
-/// Help › Keyboard Shortcuts: every command with a key, from the registry.
+/// The Keyboard Shortcuts groups, in pill order.
+pub const SHORTCUT_GROUPS: [&str; 4] = ["General", "Edit", "View", "Playback"];
+
+/// Which group a command's shortcut is listed under.
+fn shortcut_group(id: &str) -> usize {
+    match id.split('.').next().unwrap_or_default() {
+        "edit" | "model" | "tool" => 1,
+        "view" => 2,
+        "transport" | "step" | "video" => 3,
+        _ => 0,
+    }
+}
+
+/// "⌥⌘G" as caps: each modifier on its own, then the key.
+pub fn split_keys(label: &str) -> Vec<String> {
+    let mut caps = Vec::new();
+    let mut rest = label;
+    while let Some(c) = rest.chars().next().filter(|c| "⌃⌥⇧⌘".contains(*c)) {
+        caps.push(c.to_string());
+        rest = &rest[c.len_utf8()..];
+    }
+    if !rest.is_empty() {
+        caps.push(rest.to_owned());
+    }
+    caps
+}
+
+/// Help › Keyboard Shortcuts: every command with a key, from the registry, grouped under pills.
 fn shortcuts(ui: &mut Ui, app: &mut BrickMotionApp) {
     if !app.shortcuts_open {
         return;
     }
     let t = app.theme;
     let mut close = false;
-    let modal = Modal::new(Id::unique("shortcuts-sheet")).show(ui.ctx(), |ui| {
-        ui.set_width(420.0);
-        ui.label(RichText::new("Keyboard Shortcuts").strong().size(13.0).color(t.text1));
-        ui.add_space(8.0);
-        egui::ScrollArea::vertical().max_height(460.0).show(ui, |ui| {
-            egui::Grid::new("shortcuts-grid").num_columns(2).spacing([24.0, 6.0]).show(ui, |ui| {
-                let mut rows: Vec<_> = registry().iter().filter_map(|c| Some((c.title, Shortcut::parse(c.keys?)?.label()))).collect();
-                rows.sort_by(|a, b| a.0.cmp(b.0));
-                rows.dedup();
-                for (title, keys) in rows {
-                    ui.label(RichText::new(title).color(t.text1));
-                    ui.label(RichText::new(keys).color(t.text2));
-                    ui.end_row();
+    let mut tab = app.shortcuts_tab.min(SHORTCUT_GROUPS.len() - 1);
+    let modal = Modal::new(Id::unique("shortcuts-sheet")).frame(sheet::frame(&t)).backdrop_color(sheet::backdrop(&t)).show(ui.ctx(), |ui| {
+        ui.set_width(440.0);
+        ui.spacing_mut().item_spacing = egui::vec2(8.0, 0.0);
+        close = sheet::header(ui, &t, "Keyboard Shortcuts");
+        sheet::body(ui, |ui| {
+            ui.horizontal(|ui| {
+                ui.spacing_mut().button_padding = egui::vec2(14.0, 0.0);
+                for (i, g) in SHORTCUT_GROUPS.iter().enumerate() {
+                    if sheet::pill(ui, &t, g, i == tab).clicked() {
+                        tab = i;
+                    }
                 }
             });
-        });
-        ui.add_space(10.0);
-        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            if ui.button("Done").clicked() {
-                close = true;
-            }
+            ui.add_space(16.0);
+            let mut rows: Vec<_> = registry()
+                .iter()
+                .filter(|c| shortcut_group(c.id) == tab)
+                .filter_map(|c| Some((c.title.trim_end_matches('…'), c.icon, split_keys(&Shortcut::parse(c.keys?)?.label()))))
+                .collect();
+            rows.sort_by(|a, b| a.0.cmp(b.0));
+            rows.dedup_by(|a, b| a.0 == b.0);
+            // An inset well holding the group's name and a raised card of rows.
+            egui::Frame::new()
+                .fill(t.bg0)
+                .stroke(egui::Stroke::new(1.0, t.border))
+                .corner_radius(egui::CornerRadius::same(12))
+                .inner_margin(egui::Margin { left: 4, right: 4, top: 0, bottom: 4 })
+                .show(ui, |ui| {
+                    egui::Frame::new().inner_margin(egui::Margin { left: 14, right: 14, top: 12, bottom: 10 }).show(ui, |ui| {
+                        ui.label(RichText::new(SHORTCUT_GROUPS[tab]).size(13.0).strong().color(t.text1));
+                    });
+                    egui::Frame::new()
+                        .fill(t.bg2)
+                        .stroke(egui::Stroke::new(1.0, t.border2))
+                        .corner_radius(egui::CornerRadius::same(10))
+                        .inner_margin(egui::Margin::symmetric(14, 6))
+                        .show(ui, |ui| {
+                            egui::ScrollArea::vertical().min_scrolled_height(352.0).max_height(352.0).auto_shrink([false, true]).show(ui, |ui| {
+                                for (title, icon, keys) in rows {
+                                    ui.allocate_ui_with_layout(
+                                        egui::vec2(ui.available_width(), 44.0),
+                                        egui::Layout::left_to_right(egui::Align::Center),
+                                        |ui| {
+                                            ui.set_min_height(44.0);
+                                            crate::icons::icon(ui, icon, 16.0, t.text2);
+                                            ui.add_space(4.0);
+                                            ui.label(RichText::new(title).size(13.0).color(t.text1));
+                                            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                                                sheet::keycaps(ui, &t, &keys);
+                                            });
+                                        },
+                                    );
+                                }
+                            });
+                        });
+                });
         });
     });
+    app.shortcuts_tab = tab;
     if close || modal.should_close() || ui.input(|i| i.key_pressed(Key::Escape)) {
         app.shortcuts_open = false;
         ui.ctx().request_repaint();
@@ -154,5 +208,13 @@ mod tests {
         assert_eq!(free_group_name(&[]), "Group");
         assert_eq!(free_group_name(&["Group".into()]), "Group 2");
         assert_eq!(free_group_name(&["Group".into(), "Group 2".into()]), "Group 3");
+    }
+
+    #[test]
+    fn keys_split_into_caps() {
+        assert_eq!(split_keys("⌥⌘G"), ["⌥", "⌘", "G"]);
+        assert_eq!(split_keys("⇧⌘Z"), ["⇧", "⌘", "Z"]);
+        assert_eq!(split_keys("Space"), ["Space"]);
+        assert_eq!(split_keys("⇧←"), ["⇧", "←"]);
     }
 }

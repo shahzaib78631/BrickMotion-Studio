@@ -1,5 +1,5 @@
 //! The 38-px title bar beside the traffic lights: brand, File, undo, document tab, status.
-use egui::{Align, Color32, CornerRadius, Frame, Layout, Panel, RichText, Sense, Stroke, Ui, Vec2, ViewportCommand};
+use egui::{Align, CornerRadius, Frame, Layout, Panel, RichText, Sense, Stroke, Ui, Vec2, ViewportCommand};
 
 use super::{icon_button, icon_button_tip};
 use crate::BrickMotionApp;
@@ -24,7 +24,7 @@ pub fn show(ui: &mut Ui, app: &mut BrickMotionApp) {
             ui.horizontal_centered(|ui| {
                 ui.spacing_mut().item_spacing.x = 6.0;
                 ui.add_space(78.0); // traffic lights
-                icons::icon(ui, Icon::Brick, 16.0, t.playhead);
+                icons::icon(ui, Icon::Brick, 16.0, t.accent);
                 ui.label(RichText::new("BrickMotion").strong().color(t.text1));
                 ui.add_space(6.0);
                 if icon_button(ui, &t, Icon::File, "Open…", true, false, 28.0).clicked() {
@@ -65,7 +65,7 @@ fn document_tab(ui: &mut Ui, t: &crate::Theme, title: &str, edited: bool, bar: e
     p.rect(r, CornerRadius { nw: 7, ne: 7, sw: 0, se: 0 }, t.bg2, Stroke::new(1.0, t.border), egui::StrokeKind::Inside);
     p.hline(r.x_range().shrink(1.0), bar.bottom() - 0.5, Stroke::new(1.5, t.bg2));
     let x = r.left() + 12.0 + galley.size().x;
-    p.galley(egui::pos2(r.left() + 12.0, r.center().y - galley.size().y / 2.0), galley, Color32::WHITE);
+    p.galley(egui::pos2(r.left() + 12.0, r.center().y - galley.size().y / 2.0), galley, t.text1);
     if edited {
         p.circle_filled(egui::pos2(x + 9.0, r.center().y), 3.0, t.text2);
     }

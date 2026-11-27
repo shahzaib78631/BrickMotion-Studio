@@ -155,6 +155,7 @@ impl Shortcut {
             Key::ArrowRight => "→",
             Key::ArrowUp => "↑",
             Key::ArrowDown => "↓",
+            Key::Comma => ",",
             k => k.name(),
         });
         out
@@ -322,6 +323,8 @@ static REGISTRY: &[Command] = &[
     Command { id: "edit.copy_viewport", title: "Copy Viewport Image", icon: Icon::Copy, keys: None, tip: "Copy what the viewport shows as an image.", workspace: Workspace::Build, tab: "", group: "Edit", when: When::Document, menu: Menu::Edit },
     Command { id: "file.open", title: "Open…", icon: Icon::File, keys: Some("⌘O"), tip: "Open a BrickMotion project or an LDraw model.", workspace: Workspace::Build, tab: "", group: "File", when: When::Always, menu: Menu::File },
     Command { id: "file.import_inventory", title: "Import Parts Inventory…", icon: Icon::Inventory, keys: None, tip: "Import a Rebrickable CSV or Studio parts-bin file as pieces.", workspace: Workspace::Build, tab: "", group: "File", when: When::Document, menu: Menu::File },
+    Command { id: "app.about", title: "About BrickMotion", icon: Icon::Help, keys: None, tip: "Versions of the app, engine and renderer.", workspace: Workspace::Build, tab: "", group: "App", when: When::Always, menu: Menu::App },
+    Command { id: "app.settings", title: "Settings…", icon: Icon::Gear, keys: Some("⌘,"), tip: "Theme, building defaults, autosave and more.", workspace: Workspace::Build, tab: "", group: "App", when: When::Always, menu: Menu::App },
     Command { id: "app.quit", title: "Quit BrickMotion", icon: Icon::Close, keys: Some("⌘Q"), tip: "Quit, asking to save an edited document first.", workspace: Workspace::Build, tab: "", group: "App", when: When::Always, menu: Menu::App },
     Command { id: "file.new", title: "New", icon: Icon::Plus, keys: Some("⌘N"), tip: "Start an empty project.", workspace: Workspace::Build, tab: "", group: "File", when: When::Always, menu: Menu::File },
     Command { id: "file.save", title: "Save", icon: Icon::Down, keys: Some("⌘S"), tip: "Save the project as a .brickmotion file.", workspace: Workspace::Build, tab: "", group: "File", when: When::Document, menu: Menu::File },
@@ -366,5 +369,6 @@ static REGISTRY: &[Command] = &[
     Command { id: "model.make_unique", title: "Make Unique", icon: Icon::Copy, keys: None, tip: "Give this use of a submodel its own copy, so edits change only it.", workspace: Workspace::Build, tab: "", group: "Model", when: When::Selection, menu: Menu::Model },
     Command { id: "model.ungroup", title: "Remove from Group", icon: Icon::Group, keys: None, tip: "Take the selected pieces out of their group.", workspace: Workspace::Build, tab: "", group: "Model", when: When::Selection, menu: Menu::Model },
     Command { id: "model.group", title: "Group…", icon: Icon::Group, keys: None, tip: "Name a group for the selected pieces, so you can select them together.", workspace: Workspace::Build, tab: "", group: "Model", when: When::Selection, menu: Menu::Model },
+    Command { id: "help.guide", title: "BrickMotion Help", icon: Icon::Help, keys: None, tip: "A short guide to building, animating and exporting, in your browser.", workspace: Workspace::Build, tab: "", group: "Help", when: When::Always, menu: Menu::Help },
     Command { id: "help.shortcuts", title: "Keyboard Shortcuts", icon: Icon::Search, keys: None, tip: "List every command and its keyboard shortcut.", workspace: Workspace::Build, tab: "", group: "Help", when: When::Always, menu: Menu::Help },
 ];

@@ -21,7 +21,7 @@ pub fn show(ui: &mut Ui, app: &mut BrickMotionApp) {
                 answer = Some(Answer::DontSave);
             }
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                let save = egui::Button::new(RichText::new("Save").color(egui::Color32::WHITE)).fill(t.accent);
+                let save = egui::Button::new(RichText::new("Save").color(t.on_accent)).fill(t.accent);
                 if ui.add(save).clicked() {
                     answer = Some(Answer::Save);
                 }

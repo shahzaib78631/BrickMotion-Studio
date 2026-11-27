@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>BrickMotion Help</title>
+<style>
+:root{color-scheme:light dark;--bg:#f5f6f8;--card:#fff;--t1:#1a1c20;--t2:#4f5662;--b:#dcdfe6;--a:#2f6fe4}
+@media (prefers-color-scheme:dark){:root{--bg:#1a1b1f;--card:#202227;--t1:#e8eaed;--t2:#a4a9b1;--b:#2c2f36;--a:#4f8cff}}
+body{margin:0;background:var(--bg);color:var(--t1);font:14px/1.6 -apple-system,BlinkMacSystemFont,"SF Pro Text",sans-serif}
+main{max-width:720px;margin:0 auto;padding:40px 24px 64px}
+h1{font-size:24px;margin:0 0 4px}h2{font-size:17px;margin:32px 0 8px}
+p.lead{color:var(--t2);margin:0 0 24px}
+nav a{color:var(--a);text-decoration:none;margin-right:16px}
+section{background:var(--card);border:1px solid var(--b);border-radius:12px;padding:4px 20px 12px;margin-top:16px}
+kbd{font:12px ui-monospace,Menlo,monospace;border:1px solid var(--b);border-radius:5px;padding:1px 6px}
+li{margin:4px 0}
+</style></head><body><main>
+<h1>BrickMotion Help</h1>
+<p class="lead">Build a model, then animate how it goes together.</p>
+<nav><a href="#basics">Basics</a><a href="#building">Building</a><a href="#animating">Animating</a><a href="#exporting">Exporting</a></nav>
+
+<section id="basics"><h2>Basics</h2><ul>
+<li>Open an LDraw model with <kbd>⌘O</kbd>, or start a new one with <kbd>⌘N</kbd>.</li>
+<li>Orbit the view by dragging, pan with <kbd>⇧</kbd>-drag, and zoom with the scroll wheel. <kbd>F</kbd> fits the model.</li>
+<li>BrickMotion has two workspaces: <b>Build</b> to edit the model and <b>Animate</b> to make its build movie.</li>
+<li>Every command is in the Command Palette, <kbd>⌘K</kbd>. Help › Keyboard Shortcuts lists the keys.</li>
+</ul></section>
+
+<section id="building"><h2>Building</h2><ul>
+<li>Add parts from the Library; click to place them in the viewport.</li>
+<li>Click selects a submodel; hold <kbd>⌥</kbd> to pick a single piece (Settings › Building swaps this).</li>
+<li>Move with <kbd>W</kbd>, rotate with <kbd>E</kbd>, and nudge with the arrow keys.</li>
+<li>Right-click a part for Make Submodel, Group, Move to Step and more.</li>
+<li>Steps decide the order parts appear in; the Steps tab edits them.</li>
+</ul></section>
+
+<section id="animating"><h2>Animating</h2><ul>
+<li>BrickMotion plans a flight for each part from its step and how it connects.</li>
+<li>Play with <kbd>Space</kbd>. The timeline shows each part's clip; drag a clip to retime it.</li>
+<li>Build Settings sets the pacing; Staging sets where parts wait before they fly in.</li>
+<li>Camera keys live on the camera lane; add one from the current view.</li>
+</ul></section>
+
+<section id="exporting"><h2>Exporting</h2><ul>
+<li>File › Export Movie renders the build as a video, with an optional logo.</li>
+<li>File › Export Still saves the current view as an image.</li>
+<li>Exports run in the Render Queue, so you can keep working.</li>
+</ul></section>
+</main></body></html>

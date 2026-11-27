@@ -2,13 +2,12 @@
 //! soft clip naming its preset (m5-rulings.md). Mirrors `CameraTrackLane.swift`: click a key to go
 //! there and show it, drag it along the lane, and use the lane, key and move menus.
 use bm::camera::{CameraClock, CameraKey, ClockInfo};
-use egui::{Align2, Color32, FontId, Rect, Sense, Stroke, StrokeKind, Ui, WidgetInfo, pos2, vec2};
+use egui::{Align2, FontId, Rect, Sense, Stroke, StrokeKind, Ui, WidgetInfo, pos2, vec2};
 
 use super::timeline::TimelineDrag;
 use crate::BrickMotionApp;
 use crate::transport::Clock;
 
-const KEY: Color32 = Color32::from_rgb(0xe3, 0xc3, 0x6b);
 
 /// What the Camera panel shows: a key, or the move leaving a key.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -192,8 +191,8 @@ pub fn show(ui: &mut Ui, app: &mut BrickMotionApp, r: Rect, dur: f64, clock: Clo
         painter.rect(
             clip,
             6.0,
-            if selected { Color32::from_rgba_unmultiplied(0xe3, 0xc3, 0x6b, 62) } else { t.bg3 },
-            if selected { Stroke::new(1.0, KEY) } else { Stroke::new(0.5, t.border2) },
+            if selected { crate::theme::Theme::alpha(t.camera_key, 62) } else { t.bg3 },
+            if selected { Stroke::new(1.0, t.camera_key) } else { Stroke::new(0.5, t.border2) },
             StrokeKind::Inside,
         );
         if clip.width() > 64.0 {
@@ -231,7 +230,7 @@ pub fn show(ui: &mut Ui, app: &mut BrickMotionApp, r: Rect, dur: f64, clock: Clo
             let gap: Vec<_> = pts.iter().map(|p| c + (*p - c) * 1.35).collect();
             painter.add(egui::Shape::convex_polygon(gap, t.bg1, Stroke::NONE));
         }
-        let fill = if k.user { KEY } else { KEY.gamma_multiply(0.6) };
+        let fill = if k.user { t.camera_key } else { t.camera_key.gamma_multiply(0.6) };
         painter.add(egui::Shape::convex_polygon(pts, fill, Stroke::NONE));
 
         let hit = Rect::from_center_size(c, vec2(18.0, r.height()));

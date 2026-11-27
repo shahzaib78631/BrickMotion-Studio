@@ -48,8 +48,9 @@ pub fn menu_model() -> Vec<MenuSection> {
         MenuSection {
             title: "BrickMotion",
             items: vec![
-                S(SystemItem::About),
+                C("app.about"),
                 Sep,
+                C("app.settings"),
                 Sep,
                 S(SystemItem::Hide),
                 S(SystemItem::HideOthers),
@@ -149,7 +150,7 @@ pub fn menu_model() -> Vec<MenuSection> {
                 S(SystemItem::BringAllToFront),
             ],
         },
-        MenuSection { title: "Help", items: vec![C("help.shortcuts"), C("view.palette")] },
+        MenuSection { title: "Help", items: vec![C("help.guide"), Sep, C("help.shortcuts"), C("view.palette")] },
     ]
 }
 
@@ -347,7 +348,8 @@ mod tests {
         let titles: Vec<&str> = m.iter().map(|s| s.title).collect();
         assert_eq!(titles, ["BrickMotion", "File", "Edit", "Model", "Steps", "View", "Window", "Help"]);
         assert!(m[6].items.contains(&MenuEntry::Command("output.render_queue")), "Window › Render Queue");
-        assert_eq!(m[7].items, vec![MenuEntry::Command("help.shortcuts"), MenuEntry::Command("view.palette")]);
+        assert_eq!(m[7].items, vec![MenuEntry::Command("help.guide"), MenuEntry::Separator, MenuEntry::Command("help.shortcuts"), MenuEntry::Command("view.palette")]);
+        assert_eq!(m[0].items[..3], [MenuEntry::Command("app.about"), MenuEntry::Separator, MenuEntry::Command("app.settings")], "About, then Settings…");
         for id in ["model.make_submodel", "model.extract", "model.make_unique", "model.new_submodel", "model.group", "model.ungroup"] {
             assert!(m[3].items.contains(&MenuEntry::Command(id)), "Model › {id}");
         }

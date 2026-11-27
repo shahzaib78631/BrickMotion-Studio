@@ -353,7 +353,7 @@ pub fn show_confirm(ui: &mut egui::Ui, app: &mut BrickMotionApp) {
         ui.add_space(12.0);
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             let label = if detach { "Replace Keys and Detach" } else { "Replace Keys" };
-            let replace = egui::Button::new(egui::RichText::new(label).color(egui::Color32::WHITE)).fill(t.accent);
+            let replace = egui::Button::new(egui::RichText::new(label).color(t.on_accent)).fill(t.accent);
             if ui.add(replace).clicked() {
                 answer = Some(true);
             }

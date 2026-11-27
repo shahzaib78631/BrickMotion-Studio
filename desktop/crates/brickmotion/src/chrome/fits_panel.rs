@@ -250,7 +250,7 @@ fn part_row(ui: &mut Ui, app: &mut BrickMotionApp, row: &PartRow<'_>) -> bool {
                 match app.previews.get(ui.ctx(), row.part_name, row.color) {
                     Preview::Ready(tex) => {
                         let uv = Rect::from_min_max(Pos2::ZERO, pos2(1.0, 1.0));
-                        ui.painter().image(tex.id(), thumb_rect.shrink(2.0), uv, Color32::WHITE);
+                        ui.painter().image(tex.id(), thumb_rect.shrink(2.0), uv, crate::theme::NO_TINT);
                     }
                     Preview::Pending => {
                         icons::paint(ui, Icon::Brick, thumb_rect.shrink(10.0), 16.0, t.text3);
@@ -269,7 +269,7 @@ fn part_row(ui: &mut Ui, app: &mut BrickMotionApp, row: &PartRow<'_>) -> bool {
     let resp = ui.interact(inner.response.rect, ui.make_persistent_id(row.id_salt), Sense::click());
     resp.widget_info(|| WidgetInfo::selected(egui::Role::Button, true, row.selected, format!("{} — {}", row.title, row.detail)));
     if !row.selected && resp.hovered() {
-        ui.painter().rect_filled(inner.response.rect, CornerRadius::ZERO, Color32::from_white_alpha(8));
+        ui.painter().rect_filled(inner.response.rect, CornerRadius::ZERO, t.ink(8));
     }
     resp.on_hover_cursor(egui::CursorIcon::PointingHand).clicked()
 }

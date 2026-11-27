@@ -29,7 +29,7 @@ pub struct AxisEnd {
 
 /// Projects all six world axis directions into navigator space using `OrbitCamera`'s basis
 /// (LDraw space: `-y` is up, `-z` is front, `+x` is right), sorted back-to-front by depth.
-pub fn project_axes(cam: &bm::Camera, center: Pos2, radius: f32) -> [AxisEnd; 6] {
+pub fn project_axes(cam: &bm::Camera, center: Pos2, radius: f32, axis: [Color32; 3]) -> [AxisEnd; 6] {
     let (sa, ca) = cam.yaw.sin_cos();
     let (se, ce) = cam.pitch.sin_cos();
     // Matches `bmr::OrbitCamera::eye()` & `basis()` in `native/render/src/prep/camera.cpp`.
@@ -37,9 +37,7 @@ pub fn project_axes(cam: &bm::Camera, center: Pos2, radius: f32) -> [AxisEnd; 6]
     let right = [ca, 0.0, -sa]; // unit vector to the right on screen
     let up = [sa * se, -ce, ca * se]; // unit vector upward on screen
 
-    let red = Color32::from_rgb(0xe5, 0x48, 0x4d);
-    let green = Color32::from_rgb(0x46, 0xa7, 0x58);
-    let blue = Color32::from_rgb(0x0e, 0x7f, 0xf1);
+    let [red, green, blue] = axis;
 
     struct AxisSpec {
         dir: [f64; 3],
@@ -97,7 +95,7 @@ pub fn show(ui: &mut Ui, app: &mut BrickMotionApp, area: Rect) {
         let (r, bg_resp) = ui.allocate_exact_size(vec2(SIZE, SIZE), Sense::click_and_drag());
         bg_resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, "Axis Navigator"));
         let center = r.center();
-        let ends = project_axes(&cam, center, RADIUS);
+        let ends = project_axes(&cam, center, RADIUS, crate::theme::of(ui.ctx()).axis);
 
         let mut hovered_idx: Option<usize> = None;
         let mut any_dragged = bg_resp.dragged();
@@ -129,9 +127,9 @@ pub fn show(ui: &mut Ui, app: &mut BrickMotionApp, area: Rect) {
         let painter = ui.painter();
         let bg_hovered = bg_resp.hovered() || hovered_idx.is_some() || any_dragged;
         let bg_fill = if bg_hovered {
-            Color32::from_white_alpha(20)
+            t.ink(20)
         } else {
-            Color32::from_white_alpha(10)
+            t.ink(10)
         };
         let bg_stroke = if any_dragged { t.accent } else if bg_hovered { t.border2 } else { t.border };
         painter.circle(center, SIZE * 0.46, bg_fill, Stroke::new(1.0, bg_stroke));
@@ -139,12 +137,12 @@ pub fn show(ui: &mut Ui, app: &mut BrickMotionApp, area: Rect) {
         // Draw stems back-to-front so nearer axes overlap farther ones.
         for e in &ends {
             let alpha = if e.depth < 0.0 { 95 } else { 230 };
-            let stem_c = Color32::from_rgba_unmultiplied(e.color.r(), e.color.g(), e.color.b(), alpha);
+            let stem_c = crate::theme::Theme::alpha(e.color, alpha);
             painter.line_segment([center, e.pos], Stroke::new(1.75, stem_c));
         }
 
         // Subtle centre hub.
-        painter.circle_filled(center, 2.4, Color32::from_black_alpha(130));
+        painter.circle_filled(center, 2.4, t.shade(130));
 
         // Draw bubbles back-to-front.
         for (i, e) in ends.iter().enumerate() {
@@ -155,19 +153,19 @@ pub fn show(ui: &mut Ui, app: &mut BrickMotionApp, area: Rect) {
                 let rad = if hot { DOT_POS + 1.5 } else { DOT_POS };
                 painter.circle_filled(e.pos, rad, col);
                 if hot {
-                    painter.circle_stroke(e.pos, rad, Stroke::new(1.25, Color32::WHITE));
+                    painter.circle_stroke(e.pos, rad, Stroke::new(1.25, t.on_accent));
                 }
-                painter.text(e.pos + vec2(0.0, 0.5), Align2::CENTER_CENTER, lbl, FontId::proportional(10.0), Color32::WHITE);
+                painter.text(e.pos + vec2(0.0, 0.5), Align2::CENTER_CENTER, lbl, FontId::proportional(10.0), t.on_accent);
             } else {
                 let rad = if hot { DOT_NEG + 1.5 } else { DOT_NEG };
                 let fill = if hot {
                     col
                 } else {
-                    Color32::from_rgba_unmultiplied(0x1b, 0x1d, 0x21, 225)
+                    crate::theme::Theme::alpha(t.bg1, 225)
                 };
                 painter.circle(e.pos, rad, fill, Stroke::new(1.75, col));
                 if hot {
-                    painter.text(e.pos + vec2(0.0, 0.5), Align2::CENTER_CENTER, e.neg_label, FontId::proportional(8.5), Color32::WHITE);
+                    painter.text(e.pos + vec2(0.0, 0.5), Align2::CENTER_CENTER, e.neg_label, FontId::proportional(8.5), t.on_accent);
                 }
             }
         }
@@ -210,7 +208,7 @@ mod tests {
     fn front_camera_projects_y_up_x_right_z_front() {
         let cam = bm::Camera { yaw: 0.0, pitch: 0.0, distance: 400.0, target: bm::Vec3::ZERO, orthographic: false, vertical_fov: 0.6 };
         let c = pos2(48.0, 48.0);
-        let ends = project_axes(&cam, c, 30.0);
+        let ends = project_axes(&cam, c, 30.0, crate::Theme::DARK.axis);
         let find = |p: bm::ViewPreset| ends.iter().find(|e| e.preset == p).unwrap();
         assert!((find(bm::ViewPreset::Right).pos.x - (c.x + 30.0)).abs() < 1e-3);
         assert!((find(bm::ViewPreset::Top).pos.y - (c.y - 30.0)).abs() < 1e-3);
@@ -224,7 +222,7 @@ mod tests {
     #[test]
     fn yaw_rotation_turns_axes_live() {
         let cam = bm::Camera { yaw: -std::f64::consts::FRAC_PI_2, pitch: 0.0, distance: 400.0, target: bm::Vec3::ZERO, orthographic: false, vertical_fov: 0.6 };
-        let ends = project_axes(&cam, pos2(48.0, 48.0), 30.0);
+        let ends = project_axes(&cam, pos2(48.0, 48.0), 30.0, crate::Theme::DARK.axis);
         // Looking from +X (Right View): Right is nearest (depth ~ 1), Left is farthest (depth ~ -1).
         assert_eq!(ends[5].preset, bm::ViewPreset::Right);
         assert_eq!(ends[0].preset, bm::ViewPreset::Left);

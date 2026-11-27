@@ -349,7 +349,7 @@ fn tiles(ui: &mut Ui, app: &mut BrickMotionApp, clock: CameraClock, m: &CameraMo
                     let (rect, resp) = ui.allocate_exact_size(vec2(w, 46.0), Sense::click());
                     let on = p.id == m.preset;
                     resp.widget_info(|| WidgetInfo::selected(egui::Role::RadioButton, true, on, &p.label));
-                    let fill = if on { t.accent_bg() } else if resp.hovered() { Color32::from_white_alpha(14) } else { Color32::from_white_alpha(8) };
+                    let fill = if on { t.accent_bg() } else if resp.hovered() { t.ink(14) } else { t.ink(8) };
                     ui.painter().rect_filled(rect, 7.0, fill);
                     if on {
                         ui.painter().rect_stroke(rect, 7.0, Stroke::new(1.0, t.accent), egui::StrokeKind::Inside);
@@ -474,7 +474,7 @@ fn camera_body(ui: &mut Ui, app: &mut BrickMotionApp) {
         hairline(ui);
         let any = !app.doc.session().camera_keys(clock).is_empty();
         float_panel::link_row(ui, |ui| {
-            let color = if any { Color32::from_rgb(0xe4, 0x6b, 0x6b) } else { t.text3 };
+            let color = if any { t.danger } else { t.text3 };
             if link(ui, &t, "Clear Camera Track", color).clicked() && any {
                 let c = app.doc.session().clear_camera_track(clock);
                 if c.refused.is_none() && app.camera_selection.as_ref().is_some_and(|(k, _)| *k == clock) {
@@ -551,7 +551,7 @@ fn camera_row(ui: &mut Ui, app: &mut BrickMotionApp, t: &Theme, cam: &SceneCamer
     }
     resp.widget_info(|| WidgetInfo::labeled(egui::Role::Button, true, &cam.name));
     if resp.hovered() {
-        ui.painter().rect_filled(rect, 0.0, Color32::from_white_alpha(8));
+        ui.painter().rect_filled(rect, 0.0, t.ink(8));
     }
     ui.painter().text(pos2(rect.left() + 26.0, y), Align2::LEFT_CENTER, &cam.name, FontId::proportional(12.5), t.text1);
     // Look Through on the right; the active camera also carries its badge.

@@ -264,7 +264,7 @@ fn header_row(ui: &mut Ui, app: &mut BrickMotionApp, r: Rect) {
     let circle_fill = if !has_pieces {
         t.bg3
     } else if play_resp.hovered() {
-        Color32::WHITE
+        t.knob
     } else {
         t.text1
     };
@@ -399,7 +399,7 @@ fn header_row(ui: &mut Ui, app: &mut BrickMotionApp, r: Rect) {
                     .add_enabled(
                         false,
                         egui::Button::new(RichText::new("Curves").size(11.5).color(t.text3))
-                            .fill(Color32::from_white_alpha(8))
+                            .fill(t.ink(8))
                             .stroke(Stroke::new(0.5, t.border))
                             .corner_radius(6)
                             .min_size(vec2(52.0, 24.0)),
@@ -409,15 +409,15 @@ fn header_row(ui: &mut Ui, app: &mut BrickMotionApp, r: Rect) {
 
                 // Auto Key red record toggle (m5-rulings.md)
                 let on = app.keys.auto_key;
-                let red = Color32::from_rgb(0xe5, 0x48, 0x4d);
+                let red = t.danger;
                 let (ak_r, ak_resp) = ui.allocate_exact_size(vec2(78.0, 24.0), Sense::click());
                 ak_resp.widget_info(|| WidgetInfo::selected(egui::Role::Button, true, on, "Auto Key"));
                 let fill = if on {
-                    Color32::from_rgba_unmultiplied(0xe5, 0x48, 0x4d, 44)
+                    Theme::alpha(t.danger, 44)
                 } else if ak_resp.hovered() {
                     t.bg3
                 } else {
-                    Color32::from_white_alpha(12)
+                    t.ink(12)
                 };
                 let stroke = Stroke::new(1.0, if on { red } else { t.border });
                 ui.painter().rect(ak_r, CornerRadius::same(6), fill, stroke, StrokeKind::Inside);
@@ -445,7 +445,7 @@ fn header_row(ui: &mut Ui, app: &mut BrickMotionApp, r: Rect) {
 /// The Build | Keyframes clock switch (m5-rulings.md): returns the clock picked this frame.
 fn clock_switch(ui: &mut Ui, t: &Theme, r: Rect, clock: Clock) -> Option<Clock> {
     let p = ui.painter();
-    p.rect_filled(r, 7.0, Color32::from_white_alpha(18));
+    p.rect_filled(r, 7.0, t.ink(18));
     let inner = r.shrink(2.0);
     let options = [(Clock::Build, "Build", 58.0), (Clock::Keyframes, "Keyframes", inner.width() - 58.0)];
     let mut x = inner.left();
@@ -457,9 +457,9 @@ fn clock_switch(ui: &mut Ui, t: &Theme, r: Rect, clock: Clock) -> Option<Clock> 
         let on = clock == value;
         resp.widget_info(|| WidgetInfo::selected(egui::Role::RadioButton, true, on, format!("{label} clock")));
         if on {
-            ui.painter().rect_filled(seg, 5.5, Color32::from_white_alpha(44));
+            ui.painter().rect_filled(seg, 5.5, t.ink(44));
         } else if resp.hovered() {
-            ui.painter().rect_filled(seg, 5.5, Color32::from_white_alpha(12));
+            ui.painter().rect_filled(seg, 5.5, t.ink(12));
         }
         ui.painter().text(
             seg.center(),
@@ -540,7 +540,7 @@ impl RowLayout {
 
 fn timeline_body(ui: &mut Ui, app: &mut BrickMotionApp, heads: Rect, lanes: Rect) {
     let t = app.theme;
-    let row_sep = Stroke::new(1.0, Color32::from_rgb(0x20, 0x22, 0x28));
+    let row_sep = Stroke::new(1.0, t.bg2);
 
     // Top ruler row (26 px), fixed above the scrollable tracks.
     let head_ruler = Rect::from_min_size(heads.min, vec2(heads.width(), RULER_H));
@@ -568,7 +568,7 @@ fn timeline_body(ui: &mut Ui, app: &mut BrickMotionApp, heads: Rect, lanes: Rect
         if dur > 0.0 {
             let x0 = lanes.left() + app.timeline.view.screen_x(0.0, dur) as f32;
             let x1 = lanes.left() + app.timeline.view.screen_x(dur, dur) as f32;
-            let shade = Color32::from_black_alpha(64);
+            let shade = t.shade(64);
             let sp = ui.painter_at(tracks_lanes);
             if x0 > tracks_lanes.left() {
                 sp.rect_filled(Rect::from_min_max(tracks_lanes.min, pos2(x0.min(tracks_lanes.right()), tracks_lanes.bottom())), 0.0, shade);
@@ -649,7 +649,7 @@ fn timeline_body(ui: &mut Ui, app: &mut BrickMotionApp, heads: Rect, lanes: Rect
 
                 // Build sub-lanes when open
                 if layout.build_open {
-                    let sub_bg = Color32::from_rgba_unmultiplied(0x17, 0x18, 0x1b, 200);
+                    let sub_bg = Theme::alpha(t.bg0, 200);
 
                     // 2a. Sequence
                     split_row(
@@ -761,7 +761,7 @@ fn timeline_body(ui: &mut Ui, app: &mut BrickMotionApp, heads: Rect, lanes: Rect
     // Grey out lanes while replanning (keep last Ready build visible underneath).
     if app.transport.busy() {
         ui.painter()
-            .rect_filled(tracks_lanes, 0.0, Color32::from_rgba_unmultiplied(0x1a, 0x1b, 0x1f, 130));
+            .rect_filled(tracks_lanes, 0.0, Theme::alpha(t.bg1, 130));
     }
 
     // Orange playhead line + timecode cap drawn over ruler and all lanes.
@@ -843,7 +843,7 @@ fn split_rects(ui: &mut Ui, head_w: f32, lane_w: f32, height: f32, sep: Stroke) 
     let hr = Rect::from_min_size(row.min, vec2(head_w, height));
     let lr = Rect::from_min_size(pos2(row.left() + head_w, row.top()), vec2(lane_w, height));
     ui.painter().hline(row.x_range(), row.bottom() - 0.5, sep);
-    ui.painter().vline(hr.right() - 0.5, row.y_range(), Stroke::new(1.0, Color32::from_rgb(0x2c, 0x2f, 0x36)));
+    ui.painter().vline(hr.right() - 0.5, row.y_range(), Stroke::new(1.0, crate::theme::of(ui.ctx()).border));
     (hr, lr)
 }
 
@@ -862,7 +862,7 @@ fn split_row(
     head(ui, hr);
     lane(ui, lr);
     ui.painter().hline(row.x_range(), row.bottom() - 0.5, sep);
-    ui.painter().vline(hr.right() - 0.5, row.y_range(), Stroke::new(1.0, Color32::from_rgb(0x2c, 0x2f, 0x36)));
+    ui.painter().vline(hr.right() - 0.5, row.y_range(), Stroke::new(1.0, crate::theme::of(ui.ctx()).border));
 }
 
 fn draw_collapsed_heads(ui: &mut Ui, app: &BrickMotionApp, heads: Rect, sep: Stroke) {
@@ -921,8 +921,8 @@ fn track_head(
                 ui.add_space(8.0);
                 let resp = ui
                     .add(
-                        egui::Button::new(RichText::new(b).size(11.0).color(t.playhead))
-                            .fill(Color32::from_rgba_unmultiplied(0xff, 0x9f, 0x43, 28))
+                        egui::Button::new(RichText::new(b).size(11.0).color(t.accent))
+                            .fill(t.accent_a(28))
                             .stroke(Stroke::NONE)
                             .corner_radius(4),
                     )
@@ -980,7 +980,7 @@ fn empty_placeholder(ui: &mut Ui, app: &mut BrickMotionApp, r: Rect) {
             } else {
                 ui.label(RichText::new("The build hasn't been planned yet.").size(12.5).color(t.text2));
                 ui.add_space(8.0);
-                let btn = egui::Button::new(RichText::new("Plan Build").color(Color32::WHITE))
+                let btn = egui::Button::new(RichText::new("Plan Build").color(t.on_accent))
                     .fill(t.accent)
                     .stroke(Stroke::NONE)
                     .corner_radius(6);
@@ -1000,14 +1000,14 @@ fn failed_row(ui: &mut Ui, app: &mut BrickMotionApp, r: Rect) {
     ui.scope_builder(UiBuilder::new().max_rect(card.shrink2(vec2(12.0, 6.0))), |ui| {
         ui.horizontal_centered(|ui| {
             ui.spacing_mut().item_spacing.x = 8.0;
-            icons::icon(ui, Icon::Help, 16.0, t.playhead);
+            icons::icon(ui, Icon::Help, 16.0, t.warning);
             ui.label(RichText::new("The build could not be planned.").strong().color(t.text1));
             if !app.transport.failure.is_empty() {
                 ui.label(RichText::new(&app.transport.failure).color(t.text2));
             }
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                 ui.spacing_mut().item_spacing.x = 8.0;
-                let again = egui::Button::new(RichText::new("Try Again").color(Color32::WHITE))
+                let again = egui::Button::new(RichText::new("Try Again").color(t.on_accent))
                     .fill(t.accent)
                     .stroke(Stroke::NONE)
                     .corner_radius(6);
@@ -1297,7 +1297,7 @@ fn paint_playhead(ui: &Ui, app: &BrickMotionApp, lanes: Rect, dur: f64) {
 
     // Orange time flag pill in the ruler (m6-controls.html).
     let label = format_flag_time(app, cur);
-    let ink = Color32::from_rgb(0x1a, 0x11, 0x00);
+    let ink = t.on_playhead;
     let g = p.layout_no_wrap(label, FontId::monospace(10.5), ink);
     let flag_w = (g.size().x + 12.0).max(34.0);
     let flag_h = 17.0;
@@ -1361,7 +1361,7 @@ fn sequence_lane(ui: &mut Ui, app: &mut BrickMotionApp, r: Rect, dur: f64) {
         let fill = if dragging_this {
             t.accent_bg()
         } else {
-            Color32::from_rgba_unmultiplied(255, 255, 255, 19)
+            t.ink(19)
         };
         clip_p.rect_filled(rect, 4.0, fill);
         if dragging_this {
@@ -1462,11 +1462,11 @@ fn steps_lane(ui: &mut Ui, app: &mut BrickMotionApp, r: Rect, dur: f64) {
         let fill = if selected {
             t.accent_bg()
         } else if resp.hovered() {
-            Color32::from_white_alpha(26)
+            t.ink(26)
         } else {
-            Color32::from_white_alpha(15)
+            t.ink(15)
         };
-        let stroke = Stroke::new(1.0, if selected { t.accent } else { Color32::from_white_alpha(14) });
+        let stroke = Stroke::new(1.0, if selected { t.accent } else { t.ink(14) });
         clip_p.rect(rect, CornerRadius::same(6), fill, stroke, StrokeKind::Inside);
 
         if w >= 22.0 {
@@ -1637,9 +1637,9 @@ fn pauses_lane(ui: &mut Ui, app: &mut BrickMotionApp, r: Rect, dur: f64) {
         }
         let focused = app.timeline.focused_hold.is_some_and(|(rid, _)| rid == run.id);
         let fill = if dragging_this || focused {
-            Color32::from_rgba_unmultiplied(0x4f, 0x8c, 0xff, 110)
+            t.accent_a(110)
         } else {
-            Color32::from_rgba_unmultiplied(164, 169, 177, 68)
+            Theme::alpha(t.text2, 68)
         };
         clip_p.rect_filled(strip, 2.0, fill);
 
@@ -1655,7 +1655,7 @@ fn pauses_lane(ui: &mut Ui, app: &mut BrickMotionApp, r: Rect, dur: f64) {
                 clip_p.rect_filled(
                     Rect::from_center_size(pos2(strip.right() - 2.5, strip.center().y), vec2(2.0, 8.0)),
                     1.0,
-                    Color32::from_rgba_unmultiplied(232, 234, 237, 90),
+                    Theme::alpha(t.text1, 90),
                 );
             }
             if resp.clicked() {
@@ -1723,7 +1723,7 @@ fn submodels_lane(ui: &mut Ui, app: &mut BrickMotionApp, r: Rect, dur: f64, dept
             rect,
             CornerRadius::same(4),
             if resp.hovered() {
-                Color32::from_rgba_unmultiplied(0x4f, 0x8c, 0xff, 55)
+                t.accent_a(55)
             } else {
                 t.bg3
             },
@@ -1736,7 +1736,7 @@ fn submodels_lane(ui: &mut Ui, app: &mut BrickMotionApp, r: Rect, dur: f64, dept
                 clip_p.rect_filled(
                     Rect::from_min_max(pos2(ax, rect.top() + 2.0), pos2(rect.right() - 1.0, rect.bottom() - 2.0)),
                     2.0,
-                    Color32::from_rgba_unmultiplied(0x4f, 0x8c, 0xff, 90),
+                    t.accent_a(90),
                 );
             }
         }
@@ -1771,6 +1771,7 @@ fn submodels_lane(ui: &mut Ui, app: &mut BrickMotionApp, r: Rect, dur: f64, dept
 
 /// Snaps track: one thin vertical tick at each flight's seat time (`end`), drawn only for visible times.
 fn snaps_lane(ui: &Ui, app: &BrickMotionApp, r: Rect, dur: f64) {
+    let t = app.theme;
     let flights = app.transport.flights();
     if dur <= 0.0 || flights.is_empty() {
         return;
@@ -1780,7 +1781,7 @@ fn snaps_lane(ui: &Ui, app: &BrickMotionApp, r: Rect, dur: f64) {
     let vis1 = view.visible_end() * dur;
     let p = ui.painter_at(r);
     let alpha = if app.prefs.play_snap_sounds { 95 } else { 32 };
-    let stroke = Stroke::new(1.0, Color32::from_rgba_unmultiplied(232, 234, 237, alpha));
+    let stroke = Stroke::new(1.0, Theme::alpha(t.text1, alpha));
     let y0 = r.center().y - 7.0;
     let y1 = r.center().y + 7.0;
     // Track last painted pixel so 9,720 flights zoomed out never overdraw thousands of lines on one pixel.

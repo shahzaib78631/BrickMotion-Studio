@@ -7,7 +7,7 @@ use std::collections::HashSet;
 use std::rc::Rc;
 
 use bm::keys::{KeyChannel, KeyObject, KeyRowPick};
-use egui::{Align2, Color32, FontId, Rect, Sense, Stroke, Ui, WidgetInfo, pos2, vec2};
+use egui::{Align2, FontId, Rect, Sense, Stroke, Ui, WidgetInfo, pos2, vec2};
 
 use super::timeline::TimelineDrag;
 use crate::BrickMotionApp;
@@ -15,8 +15,6 @@ use crate::BrickMotionApp;
 pub const ROW_H: f32 = 26.0;
 /// Rows drawn for a filter that matches many objects.
 const MAX_ROWS: usize = 200;
-const DOT: Color32 = Color32::from_rgb(0x4f, 0x8c, 0xff);
-const PICKED: Color32 = Color32::from_rgb(0xff, 0x9f, 0x43);
 
 /// An object of the Keys track: a piece, or a submodel keyed as one.
 pub type ObjectId = (u32, bool);
@@ -222,7 +220,7 @@ pub fn row(ui: &mut Ui, app: &mut BrickMotionApp, hr: Rect, lr: Rect, object: &K
     if chosen {
         ui.painter().rect_filled(hr.shrink2(vec2(6.0, 2.0)), 6.0, t.accent_bg());
     } else if head.hovered() {
-        ui.painter().rect_filled(hr.shrink2(vec2(6.0, 2.0)), 6.0, Color32::from_white_alpha(10));
+        ui.painter().rect_filled(hr.shrink2(vec2(6.0, 2.0)), 6.0, t.ink(10));
     }
     // 3-px accent/object bar on the left (m6-controls.html).
     let bar_color = if object.baked { t.accent } else if chosen { t.text1 } else { t.text3 };
@@ -253,7 +251,7 @@ pub fn row(ui: &mut Ui, app: &mut BrickMotionApp, hr: Rect, lr: Rect, object: &K
         let (x0, x1) = (xa.min(xb), xa.max(xb));
         if x1 > x0 + 2.0 {
             let band = Rect::from_min_max(pos2(x0, lr.top() + 3.0), pos2(x1, lr.bottom() - 3.0));
-            ui.painter_at(lr).rect_filled(band, 6.0, Color32::from_rgba_unmultiplied(0x4f, 0x8c, 0xff, 26));
+            ui.painter_at(lr).rect_filled(band, 6.0, t.accent_a(26));
             if object.baked && band.width() > 90.0 {
                 ui.painter_at(band.shrink2(vec2(8.0, 0.0))).text(
                     pos2(band.left() + 10.0, y),
@@ -264,7 +262,7 @@ pub fn row(ui: &mut Ui, app: &mut BrickMotionApp, hr: Rect, lr: Rect, object: &K
                 );
             }
         }
-        ui.painter_at(lr).line_segment([pos2(x0, y), pos2(x1, y)], Stroke::new(1.5, Color32::from_rgba_unmultiplied(0x4f, 0x8c, 0xff, 90)));
+        ui.painter_at(lr).line_segment([pos2(x0, y), pos2(x1, y)], Stroke::new(1.5, t.accent_a(90)));
     }
     let lo = lr.left() - 18.0;
     let hi = lr.right() + 18.0;
@@ -278,7 +276,8 @@ pub fn row(ui: &mut Ui, app: &mut BrickMotionApp, hr: Rect, lr: Rect, object: &K
         let hit = Rect::from_center_size(pos2(x, y), vec2(12.0, ROW_H));
         let resp = ui.interact(hit, ui.scope_id().with(("key-dot", id, m.frame)), Sense::click_and_drag());
         resp.widget_info(|| WidgetInfo::selected(egui::Role::Button, true, picked, format!("{}, frame {}", object.name, m.frame)));
-        let fill = if picked { PICKED } else { DOT };
+        // A picked key reads as the selection (orange belongs to the playhead alone).
+        let fill = if picked { t.text1 } else { t.accent };
         ui.painter().circle_filled(pos2(x, y), r, fill);
         if resp.hovered() {
             ui.painter().circle_stroke(pos2(x, y), r + 2.0, Stroke::new(1.0, t.text2));

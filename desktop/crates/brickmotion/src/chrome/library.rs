@@ -71,7 +71,7 @@ pub fn show(ui: &mut Ui, app: &mut BrickMotionApp, body_h: f32, pinned_h: bool) 
     let colour = app.edit.colour;
     let colors = app.colors();
     let color_info = colors.iter().find(|c| c.code == colour);
-    let swatch = color_info.map(|c| Color32::from_rgb(c.rgb[0], c.rgb[1], c.rgb[2])).unwrap_or(Color32::from_rgb(0xa0, 0xa5, 0xa9));
+    let swatch = color_info.map(|c| Color32::from_rgb(c.rgb[0], c.rgb[1], c.rgb[2])).unwrap_or(Color32::from_rgb(0xa0, 0xa5, 0xa9)); // data colour
     let color_name = color_info.map(|c| c.name.as_str()).unwrap_or("Light Bluish Gray");
 
     // Top controls: new-part colour chip + category selector.
@@ -240,7 +240,7 @@ pub fn part_tile(ui: &mut Ui, app: &mut BrickMotionApp, part: &PartMatch, colour
     match app.previews.get(ui.ctx(), &part.name, colour) {
         Preview::Ready(tex) => {
             let uv = Rect::from_min_max(Pos2::ZERO, pos2(1.0, 1.0));
-            ui.painter().image(tex.id(), img_rect.shrink(3.0), uv, Color32::WHITE);
+            ui.painter().image(tex.id(), img_rect.shrink(3.0), uv, crate::theme::NO_TINT);
         }
         Preview::Pending => {
             icons::paint(ui, Icon::Brick, img_rect.shrink(20.0), 20.0, t.text3);

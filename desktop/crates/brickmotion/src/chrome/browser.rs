@@ -332,7 +332,7 @@ fn root_row(ui: &mut Ui, app: &BrickMotionApp, title: &str, count: usize) {
     let (r, _) = ui.allocate_exact_size(vec2(ui.available_width(), 28.0), egui::Sense::hover());
     let y = r.center().y;
     icons::paint(ui, Icon::Down, Rect::from_center_size(pos2(r.left() + 10.0, y), vec2(12.0, 12.0)), 12.0, t.text3);
-    icons::paint(ui, Icon::Brick, Rect::from_center_size(pos2(r.left() + 28.0, y), vec2(16.0, 16.0)), 16.0, t.playhead);
+    icons::paint(ui, Icon::Brick, Rect::from_center_size(pos2(r.left() + 28.0, y), vec2(16.0, 16.0)), 16.0, t.text2);
     ui.painter().text(pos2(r.left() + 42.0, y), egui::Align2::LEFT_CENTER, title, egui::FontId::proportional(12.5), t.text1);
     ui.painter().text(pos2(r.right() - 8.0, y), egui::Align2::RIGHT_CENTER, count.to_string(), egui::FontId::proportional(11.5), t.text3);
     let label = format!("{title}, {count} pieces");

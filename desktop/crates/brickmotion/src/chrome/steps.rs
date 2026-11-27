@@ -349,7 +349,7 @@ pub fn show(ui: &mut Ui, app: &mut BrickMotionApp, body_h: f32, pinned_h: bool) 
                             let sw = colors
                                 .iter()
                                 .find(|c| c.code == color_code)
-                                .map(|c| Color32::from_rgb(c.rgb[0], c.rgb[1], c.rgb[2]))
+                                .map(|c| Color32::from_rgb(c.rgb[0], c.rgb[1], c.rgb[2])) // data colour
                                 .unwrap_or(t.text3);
                             ui.painter().circle(pos2(x + 6.0, y), 4.5, sw, Stroke::new(1.0, t.border2));
                         }
@@ -501,7 +501,7 @@ pub fn show_editor(ui: &mut Ui, app: &mut BrickMotionApp) {
 
                 ui.horizontal(|ui| {
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        let done = egui::Button::new(RichText::new("Done").color(Color32::WHITE))
+                        let done = egui::Button::new(RichText::new("Done").color(t.on_accent))
                             .fill(t.accent)
                             .stroke(Stroke::NONE);
                         if ui.add(done).clicked() {

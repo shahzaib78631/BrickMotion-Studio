@@ -3,7 +3,7 @@
 //! grey with a grey slider fill; touching it sets it, and its reset puts it back to inherited.
 //! Every change saves on release as one `set_motion_fields` call (one undo step).
 use bm::motion::{MotionFields, MotionScope, effective_motion, flight_phases};
-use egui::{Color32, CornerRadius, Rect, Sense, Ui, WidgetInfo, pos2, vec2};
+use egui::{CornerRadius, Rect, Sense, Ui, WidgetInfo, pos2, vec2};
 
 use super::float_panel::{self, Head, PanelKind, group_heading};
 use super::widgets::{SliderEvent, SliderLook, hairline, inset_group, parse_number, popup_row, segmented, slider_row_with};
@@ -220,9 +220,9 @@ fn body(ui: &mut Ui, app: &mut BrickMotionApp, target: &MotionTarget) {
                 let on = own == fields;
                 let (r, resp) = ui.allocate_exact_size(vec2(w, 40.0), Sense::click());
                 resp.widget_info(|| WidgetInfo::selected(egui::Role::Button, true, on, name));
-                let fill = if on { t.accent_bg() } else if resp.hovered() { Color32::from_white_alpha(18) } else { Color32::from_white_alpha(11) };
+                let fill = if on { t.accent_bg() } else if resp.hovered() { t.ink(18) } else { t.ink(11) };
                 ui.painter().rect_filled(r, CornerRadius::same(8), fill);
-                let stroke = if on { egui::Stroke::new(1.0, t.accent) } else { egui::Stroke::new(0.5, Color32::from_white_alpha(15)) };
+                let stroke = if on { egui::Stroke::new(1.0, t.accent) } else { egui::Stroke::new(0.5, t.ink(15)) };
                 ui.painter().rect_stroke(r, CornerRadius::same(8), stroke, egui::StrokeKind::Inside);
                 ui.painter().text(r.center(), egui::Align2::CENTER_CENTER, name, egui::FontId::proportional(11.5), if on { t.text1 } else { t.text2 });
                 if resp.on_hover_cursor(egui::CursorIcon::PointingHand).clicked() {
@@ -248,11 +248,11 @@ fn timing_bar(ui: &mut Ui, t: &Theme, effective: MotionFields) {
             info.current_text_value = Some(label.clone());
             info
         });
-        let travel = Color32::from_rgba_unmultiplied(t.accent.r(), t.accent.g(), t.accent.b(), 150);
-        let hover = Color32::from_white_alpha(60);
+        let travel = t.accent_a(150);
+        let hover = t.ink(60);
         let mut x = rect.left();
         let painter = ui.painter_at(rect);
-        painter.rect_filled(rect, 4.5, Color32::from_white_alpha(18));
+        painter.rect_filled(rect, 4.5, t.ink(18));
         let w = rect.width();
         let parts = [(p.travel, travel), (p.hover, hover), (p.landing, t.accent)];
         for (i, (share, color)) in parts.iter().enumerate() {

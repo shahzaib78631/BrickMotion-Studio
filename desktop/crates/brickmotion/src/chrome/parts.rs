@@ -153,7 +153,7 @@ pub fn show(ui: &mut Ui, app: &mut BrickMotionApp, body_h: f32, pinned_h: bool) 
                     let sw = colors
                         .iter()
                         .find(|c| c.code == row.color)
-                        .map(|c| Color32::from_rgb(c.rgb[0], c.rgb[1], c.rgb[2]))
+                        .map(|c| Color32::from_rgb(c.rgb[0], c.rgb[1], c.rgb[2])) // data colour
                         .unwrap_or(t.text3);
                     ui.painter().circle(pos2(left + 6.0, y), 5.0, sw, Stroke::new(1.0, t.border2));
                 }

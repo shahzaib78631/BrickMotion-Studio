@@ -6,15 +6,13 @@
 use std::collections::HashSet;
 
 use bm::keys::{Interpolation, KeyChannel, KeyObject, Keyframe};
-use egui::{Align2, Color32, FontId, Rect, Sense, Shape, Stroke, Ui, WidgetInfo, pos2, vec2};
+use egui::{Align2, FontId, Rect, Sense, Shape, Stroke, Ui, WidgetInfo, pos2, vec2};
 
 use super::keys_track::{FrameScale, ObjectId, seek_frame};
 use super::timeline::TimelineDrag;
 use crate::BrickMotionApp;
 
 pub const LANE_H: f32 = 22.0;
-const KEY: Color32 = Color32::from_rgb(0xc9, 0xcd, 0xd4);
-const PICKED: Color32 = Color32::from_rgb(0xff, 0x9f, 0x43);
 
 /// Height of the sheet for one object.
 pub fn height() -> f32 {
@@ -46,7 +44,7 @@ pub fn show(ui: &mut Ui, app: &mut BrickMotionApp, heads: Rect, lanes: Rect, obj
     }
     if let (Some(from), Some(now)) = (app.keys.box_from, ui.input(|i| i.pointer.latest_pos())) {
         let r = Rect::from_two_pos(from, now);
-        ui.painter().rect_filled(r, 2.0, Color32::from_rgba_unmultiplied(0x4f, 0x8c, 0xff, 30));
+        ui.painter().rect_filled(r, 2.0, t.accent_a(30));
         ui.painter().rect_stroke(r, 2.0, Stroke::new(1.0, t.accent), egui::StrokeKind::Inside);
         if area.drag_stopped() || !ui.input(|i| i.pointer.primary_down()) {
             let bounds = r.expand(4.0);
@@ -85,12 +83,12 @@ pub fn show(ui: &mut Ui, app: &mut BrickMotionApp, heads: Rect, lanes: Rect, obj
         let hr = Rect::from_min_size(pos2(heads.left(), heads.top() + i as f32 * LANE_H), vec2(heads.width(), LANE_H));
         let lr = Rect::from_min_size(pos2(lanes.left(), hr.top()), vec2(lanes.width(), LANE_H));
         if i % 2 == 0 {
-            ui.painter().rect_filled(lr, 0.0, Color32::from_white_alpha(4));
+            ui.painter().rect_filled(lr, 0.0, t.ink(4));
         }
         // Soft flight band behind the channel's key span (m6-controls.html).
         if let Some((bx0, bx1)) = span_band {
             let band = Rect::from_min_max(pos2(bx0, lr.top() + 1.0), pos2(bx1, lr.bottom() - 1.0));
-            ui.painter_at(lr).rect_filled(band, 4.0, Color32::from_rgba_unmultiplied(0x4f, 0x8c, 0xff, 18));
+            ui.painter_at(lr).rect_filled(band, 4.0, t.accent_a(18));
         }
         let head = ui.interact(hr, ui.scope_id().with(("dope-head", id, i)), Sense::click());
         let current = app.keys.property == *ch;
@@ -116,7 +114,7 @@ pub fn show(ui: &mut Ui, app: &mut BrickMotionApp, heads: Rect, lanes: Rect, obj
             if x_max > x_min + 1.0 {
                 ui.painter_at(lr).line_segment(
                     [pos2(x_min, lr.center().y), pos2(x_max, lr.center().y)],
-                    Stroke::new(1.5, Color32::from_rgba_unmultiplied(0x4f, 0x8c, 0xff, 145)),
+                    Stroke::new(1.5, t.accent_a(145)),
                 );
             }
         }
@@ -166,13 +164,13 @@ pub fn show(ui: &mut Ui, app: &mut BrickMotionApp, heads: Rect, lanes: Rect, obj
 
 fn paint_key(ui: &Ui, t: &crate::theme::Theme, c: egui::Pos2, interpolation: Interpolation, picked: bool) {
     let p = ui.painter();
-    let fill = if picked { PICKED } else { KEY };
+    let fill = if picked { t.accent } else { t.key };
     match interpolation {
         Interpolation::Smooth => {
             let r = 4.8;
             let pts = vec![pos2(c.x, c.y - r), pos2(c.x + r, c.y), pos2(c.x, c.y + r), pos2(c.x - r, c.y)];
             if picked {
-                p.add(Shape::convex_polygon(pts, PICKED, Stroke::NONE));
+                p.add(Shape::convex_polygon(pts, t.accent, Stroke::NONE));
             } else {
                 p.add(Shape::convex_polygon(pts, t.bg1, Stroke::new(1.5, t.accent)));
             }

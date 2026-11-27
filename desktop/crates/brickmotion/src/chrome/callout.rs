@@ -2,7 +2,7 @@
 //! Steps through build steps, plays a step or through the end, and switches step appearances.
 use bm::playback::AssemblyPreview;
 use egui::{
-    Align2, Area, Color32, CornerRadius, FontId, Id, Margin, Order, Rect, RichText, Sense, Stroke, Ui, WidgetInfo,
+    Align2, Area, CornerRadius, FontId, Id, Margin, Order, Rect, RichText, Sense, Stroke, Ui, WidgetInfo,
     pos2, vec2,
 };
 
@@ -189,7 +189,7 @@ fn text_icon_button(
     if active {
         ui.painter().rect_filled(rect, 6.0, t.accent_bg());
     } else if resp.hovered() {
-        ui.painter().rect_filled(rect, 6.0, Color32::from_white_alpha(18));
+        ui.painter().rect_filled(rect, 6.0, t.ink(18));
     }
     let y = rect.center().y;
     let mut x = rect.left() + 7.0;
@@ -209,7 +209,7 @@ fn dropdown_button(ui: &mut Ui, t: &crate::Theme, label: &str, a11y: &str, activ
     if active {
         ui.painter().rect_filled(rect, 6.0, t.accent_bg());
     } else if resp.hovered() {
-        ui.painter().rect_filled(rect, 6.0, Color32::from_white_alpha(18));
+        ui.painter().rect_filled(rect, 6.0, t.ink(18));
     }
     let y = rect.center().y;
     ui.painter().galley(pos2(rect.left() + 7.0, y - galley.size().y / 2.0), galley, fg);

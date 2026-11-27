@@ -68,8 +68,8 @@ enum Action {
 
 fn dot(s: &JobStatus, t: &Theme) -> Color32 {
     match s {
-        JobStatus::Complete => Color32::from_rgb(52, 199, 89),
-        JobStatus::Interrupted | JobStatus::Failed(_) => Color32::from_rgb(255, 159, 10),
+        JobStatus::Complete => t.success,
+        JobStatus::Interrupted | JobStatus::Failed(_) => t.warning,
         JobStatus::Rendering { .. } => t.accent,
         _ => t.text3,
     }
@@ -126,7 +126,7 @@ fn row(ui: &mut Ui, t: &Theme, job: &Job, action: &mut Option<Action>) {
                 ui.label(egui::RichText::new(&job.summary).size(10.5).color(t.text3));
                 if let JobStatus::Rendering { done, total } = job.status {
                     let (bar, _) = ui.allocate_exact_size(vec2(ui.available_width(), 4.0), Sense::hover());
-                    ui.painter().rect_filled(bar, CornerRadius::same(2), Color32::from_white_alpha(18));
+                    ui.painter().rect_filled(bar, CornerRadius::same(2), t.ink(18));
                     if total > 0 && done < total {
                         let mut fill = bar;
                         fill.set_width(bar.width() * done as f32 / total as f32);

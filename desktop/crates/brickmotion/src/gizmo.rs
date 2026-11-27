@@ -6,12 +6,6 @@ use egui::{Color32, FontId, Painter, Pos2, Rect, Shape, Stroke, StrokeKind, pos2
 use crate::edit::EditState;
 use crate::theme::Theme;
 
-/// Standard CAD axis hues (the only hues added to the calm dark chrome).
-const RED: Color32 = Color32::from_rgb(0xe5, 0x48, 0x4d);
-const GREEN: Color32 = Color32::from_rgb(0x30, 0xa4, 0x6c);
-const BLUE: Color32 = Color32::from_rgb(0x4f, 0x8c, 0xff);
-const VIEW_GREY: Color32 = Color32::from_rgb(0xa4, 0xa9, 0xb1);
-
 /// One active gizmo drag gesture. Pure state machine so increment tracking is unit-tested.
 #[derive(Debug, Clone)]
 pub struct GizmoDrag {
@@ -74,17 +68,17 @@ pub fn axes(session: &bm::Session, edit: &EditState) -> Mat3 {
     session.selection().first().copied().map(|p| session.axes_of(p)).unwrap_or(Mat3::IDENTITY)
 }
 
-fn handle_color(h: Handle) -> Color32 {
+fn handle_color(t: &Theme, h: Handle) -> Color32 {
     match h {
-        Handle::X | Handle::YZ => RED,
-        Handle::Y | Handle::XZ => GREEN,
-        Handle::Z | Handle::XY => BLUE,
-        Handle::View | Handle::None => VIEW_GREY,
+        Handle::X | Handle::YZ => t.axis[0],
+        Handle::Y | Handle::XZ => t.axis[1],
+        Handle::Z | Handle::XY => t.axis[2],
+        Handle::View | Handle::None => t.text2,
     }
 }
 
 fn with_alpha(c: Color32, a: u8) -> Color32 {
-    Color32::from_rgba_unmultiplied(c.r(), c.g(), c.b(), a)
+    Theme::alpha(c, a)
 }
 
 fn to_screen(rect: Rect, p: Vec2) -> Pos2 {
@@ -92,7 +86,7 @@ fn to_screen(rect: Rect, p: Vec2) -> Pos2 {
 }
 
 /// Paints the gizmo over the viewport texture using egui's painter.
-pub fn paint(painter: &Painter, rect: Rect, shape: &GizmoShape, active: Handle, hovered: Handle) {
+pub fn paint(painter: &Painter, t: &Theme, rect: Rect, shape: &GizmoShape, active: Handle, hovered: Handle) {
     let is_move = !shape.lines.is_empty();
     let highlight = if active != Handle::None { active } else { hovered };
 
@@ -102,7 +96,7 @@ pub fn paint(painter: &Painter, rect: Rect, shape: &GizmoShape, active: Handle, 
             continue;
         }
         let hot = *h == highlight;
-        let base = handle_color(*h);
+        let base = handle_color(t, *h);
         let screen_pts: Vec<Pos2> = pts.iter().map(|p| to_screen(rect, *p)).collect();
         if is_move {
             let fill_a = if hot { 76 } else { 38 }; // ~30% hot, 15% idle
@@ -124,7 +118,7 @@ pub fn paint(painter: &Painter, rect: Rect, shape: &GizmoShape, active: Handle, 
     let mut origin_pt: Option<Pos2> = None;
     for &(a, b, h) in &shape.lines {
         let hot = h == highlight;
-        let base = handle_color(h);
+        let base = handle_color(t, h);
         let alpha = if hot { 255 } else { 217 };
         let color = with_alpha(base, alpha);
         let width = if hot { 3.0 } else { 2.0 };
@@ -152,7 +146,7 @@ pub fn paint(painter: &Painter, rect: Rect, shape: &GizmoShape, active: Handle, 
     }
 
     if let Some(o) = origin_pt {
-        painter.circle_filled(o, 3.2, Color32::from_rgb(0xe8, 0xea, 0xed));
+        painter.circle_filled(o, 3.2, t.text1);
     }
 }
 

@@ -2,7 +2,7 @@
 //! the selected pieces' part as one undo step.
 use bm::library::{PartMatch, common_parts, library_parts};
 use egui::{
-    Align2, Area, Color32, FontId, Frame, Id, Key, Margin, Order, Pos2, Rect, RichText, Sense, Stroke, StrokeKind, Ui,
+    Align2, Area, FontId, Frame, Id, Key, Margin, Order, Pos2, Rect, RichText, Sense, Stroke, StrokeKind, Ui,
     WidgetInfo, pos2, vec2,
 };
 
@@ -89,7 +89,7 @@ pub fn show(ui: &mut Ui, app: &mut BrickMotionApp) {
         .fixed_pos(screen.min)
         .show(ui.ctx(), |ui| {
             let (r, _) = ui.allocate_exact_size(screen.size(), Sense::click());
-            ui.painter().rect_filled(r, 0.0, Color32::from_black_alpha(110));
+            ui.painter().rect_filled(r, 0.0, t.shade(110));
         });
 
     let heading = if count == 1 {
@@ -146,7 +146,7 @@ pub fn show(ui: &mut Ui, app: &mut BrickMotionApp) {
                     });
 
                 if let Some(err) = &app.replace.error {
-                    ui.label(RichText::new(err).size(11.5).color(Color32::from_rgb(0xe5, 0x48, 0x4d)));
+                    ui.label(RichText::new(err).size(11.5).color(t.danger));
                 }
 
                 app.replace.sync_results();
@@ -201,7 +201,7 @@ pub fn show(ui: &mut Ui, app: &mut BrickMotionApp) {
                 ui.horizontal(|ui| {
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         let can_replace = app.replace.chosen.is_some_and(|i| i < app.replace.results.len());
-                        let replace_btn = egui::Button::new(RichText::new("Replace").color(Color32::WHITE))
+                        let replace_btn = egui::Button::new(RichText::new("Replace").color(t.on_accent))
                             .fill(if can_replace { t.accent } else { t.bg3 })
                             .stroke(Stroke::NONE);
                         if ui.add_enabled(can_replace, replace_btn).clicked() {
@@ -258,7 +258,7 @@ fn replace_tile(ui: &mut Ui, app: &mut BrickMotionApp, part: &PartMatch, colour:
     match app.previews.get(ui.ctx(), &part.name, colour) {
         Preview::Ready(tex) => {
             let uv = Rect::from_min_max(Pos2::ZERO, pos2(1.0, 1.0));
-            ui.painter().image(tex.id(), img_rect.shrink(3.0), uv, Color32::WHITE);
+            ui.painter().image(tex.id(), img_rect.shrink(3.0), uv, crate::theme::NO_TINT);
         }
         Preview::Pending => {
             icons::paint(ui, Icon::Brick, img_rect.shrink(20.0), 20.0, t.text3);

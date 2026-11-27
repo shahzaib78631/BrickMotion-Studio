@@ -4,7 +4,7 @@
 use std::collections::{HashMap, HashSet};
 
 use bm::motion::{Inspection, JointEdit, JointInfo, JointReport, JointRow, JointType};
-use egui::{Align2, Color32, CornerRadius, CursorIcon, FontId, Pos2, Rect, Sense, Shape, Stroke, StrokeKind, Ui, WidgetInfo, pos2, vec2};
+use egui::{Align2, CornerRadius, CursorIcon, FontId, Pos2, Rect, Sense, Shape, Stroke, StrokeKind, Ui, WidgetInfo, pos2, vec2};
 
 use super::float_panel::{self, Head, PanelKind, group_heading};
 use super::widgets::{hairline, inset_group, secondary_button, segmented, switch_row};
@@ -819,11 +819,11 @@ pub fn show(ui: &mut Ui, app: &mut BrickMotionApp) {
         let dimmed = open_key.is_some();
         let dot_r = if dimmed { 2.8 } else { 3.6 };
         let fill = if dimmed {
-            Color32::from_rgba_unmultiplied(t.accent.r(), t.accent.g(), t.accent.b(), 110)
+            t.accent_a(110)
         } else {
-            Color32::from_rgba_unmultiplied(t.accent.r(), t.accent.g(), t.accent.b(), 220)
+            t.accent_a(220)
         };
-        let ring = if dimmed { Color32::from_white_alpha(90) } else { Color32::from_white_alpha(200) };
+        let ring = if dimmed { t.ink(90) } else { t.ink(200) };
         for j in rows.iter().filter(|j| j.kind != JointType::Fixed) {
             // In Smart Joints mode without global Joint Markers, only show markers on selected pieces.
             if !app.joints.show && !selection.contains(&j.a) && !selection.contains(&j.b) {
@@ -841,7 +841,7 @@ pub fn show(ui: &mut Ui, app: &mut BrickMotionApp) {
             let is_hov = hover.is_some_and(|h| h.distance(p) <= MARKER_HIT);
             if is_hov {
                 hovered_joint = Some((*j, p));
-                painter.circle(p, 5.5, t.accent, Stroke::new(1.5, Color32::WHITE));
+                painter.circle(p, 5.5, t.accent, Stroke::new(1.5, t.knob));
             } else {
                 painter.circle(p, dot_r, fill, Stroke::new(1.0, ring));
             }
@@ -900,7 +900,7 @@ pub fn show(ui: &mut Ui, app: &mut BrickMotionApp) {
         let ring_color = if ring_hot {
             t.accent
         } else {
-            Color32::from_rgba_unmultiplied(t.accent.r(), t.accent.g(), t.accent.b(), 195)
+            t.accent_a(195)
         };
         let ring_width = if ring_hot { 3.0 } else { 2.0 };
         painter.add(Shape::line(ring.clone(), Stroke::new(ring_width, ring_color)));
@@ -914,7 +914,7 @@ pub fn show(ui: &mut Ui, app: &mut BrickMotionApp) {
             let p_in = project(bm::Vec3::new(pivot3.x + (u.x * c + v.x * s) * r_in, pivot3.y + (u.y * c + v.y * s) * r_in, pivot3.z + (u.z * c + v.z * s) * r_in));
             let p_out = project(bm::Vec3::new(pivot3.x + (u.x * c + v.x * s) * r_world, pivot3.y + (u.y * c + v.y * s) * r_world, pivot3.z + (u.z * c + v.z * s) * r_world));
             if let (Some(a), Some(b)) = (p_in, p_out) {
-                let tick_c = Color32::from_rgba_unmultiplied(t.accent.r(), t.accent.g(), t.accent.b(), if major { 175 } else { 95 });
+                let tick_c = t.accent_a(if major { 175 } else { 95 });
                 painter.line_segment([a, b], Stroke::new(if major { 1.5 } else { 1.0 }, tick_c));
             }
         }
@@ -940,7 +940,7 @@ pub fn show(ui: &mut Ui, app: &mut BrickMotionApp) {
     {
         let dragging_slide = app.joints.live_drag.as_ref().is_some_and(|d| d.mode == DragKind::Slide);
         let slide_hot = dragging_slide || hover.is_some_and(|h| dist_to_segment(h, pa, pb) <= SLIDE_HIT);
-        let slide_c = if slide_hot { Color32::from_rgb(0x30, 0xa4, 0x6c) } else { Color32::from_rgba_unmultiplied(0x30, 0xa4, 0x6c, 210) };
+        let slide_c = if slide_hot { t.success } else { Theme::alpha(t.success, 210) };
         painter.line_segment([pa, pb], Stroke::new(if slide_hot { 3.0 } else { 2.0 }, slide_c));
         // Arrowheads on both ends.
         let dir = pb - pa;
@@ -964,7 +964,7 @@ pub fn show(ui: &mut Ui, app: &mut BrickMotionApp) {
         app.joints.slide_seg = Some((pa, pb));
     }
 
-    painter.circle(pivot, 4.8, t.accent, Stroke::new(1.5, Color32::WHITE));
+    painter.circle(pivot, 4.8, t.accent, Stroke::new(1.5, t.knob));
     card(ui, app, &t, rect, pivot, row, info.as_ref());
 }
 
@@ -1058,7 +1058,7 @@ fn card(ui: &mut Ui, app: &mut BrickMotionApp, t: &Theme, rect: Rect, pivot: Pos
                         let step = |ui: &mut Ui, text: &str, label: &str, w: f32| {
                             let (r, resp) = ui.allocate_exact_size(vec2(w, 26.0), if changing { Sense::hover() } else { Sense::click() });
                             resp.widget_info(|| WidgetInfo::labeled(egui::Role::Button, !changing, label));
-                            let fill = if resp.hovered() && !changing { Color32::from_white_alpha(24) } else { Color32::from_white_alpha(14) };
+                            let fill = if resp.hovered() && !changing { t.ink(24) } else { t.ink(14) };
                             ui.painter().rect_filled(r, 6.0, fill);
                             ui.painter().text(r.center(), Align2::CENTER_CENTER, text, FontId::proportional(11.5), if changing { t.text3 } else { t.text1 });
                             resp.clicked() && !changing
@@ -1134,7 +1134,7 @@ fn card(ui: &mut Ui, app: &mut BrickMotionApp, t: &Theme, rect: Rect, pivot: Pos
                         let sbtn = |ui: &mut Ui, text: &str, label: &str| {
                             let (r, resp) = ui.allocate_exact_size(vec2(52.0, 24.0), if changing { Sense::hover() } else { Sense::click() });
                             resp.widget_info(|| WidgetInfo::labeled(egui::Role::Button, !changing, label));
-                            let fill = if resp.hovered() && !changing { Color32::from_white_alpha(24) } else { Color32::from_white_alpha(14) };
+                            let fill = if resp.hovered() && !changing { t.ink(24) } else { t.ink(14) };
                             ui.painter().rect_filled(r, 6.0, fill);
                             ui.painter().text(r.center(), Align2::CENTER_CENTER, text, FontId::proportional(11.0), if changing { t.text3 } else { t.text1 });
                             resp.clicked() && !changing
@@ -1151,7 +1151,7 @@ fn card(ui: &mut Ui, app: &mut BrickMotionApp, t: &Theme, rect: Rect, pivot: Pos
 
                 if let Some(e) = &error {
                     ui.add_space(6.0);
-                    ui.label(egui::RichText::new(e).size(11.0).color(Color32::from_rgb(0xfe, 0xbc, 0x2e)));
+                    ui.label(egui::RichText::new(e).size(11.0).color(t.warning));
                 }
                 ui.add_space(8.0);
                 hairline(ui);

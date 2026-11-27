@@ -304,7 +304,7 @@ fn check_group(ui: &mut Ui, app: &mut BrickMotionApp, t: &Theme) {
             let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 42.0), Sense::click());
             resp.widget_info(|| WidgetInfo::labeled(egui::Role::Button, true, format!("{title}, {when}")));
             if resp.hovered() {
-                ui.painter().rect_filled(rect, 0.0, egui::Color32::from_white_alpha(8));
+                ui.painter().rect_filled(rect, 0.0, t.ink(8));
             }
             let p = ui.painter_at(rect.shrink2(vec2(12.0, 0.0)));
             p.text(pos2(rect.left() + 12.0, rect.top() + 14.0), Align2::LEFT_CENTER, &title, FontId::proportional(12.5), t.text1);

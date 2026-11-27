@@ -1,6 +1,6 @@
 //! Build Settings Properties page (m4-rulings.md: v2 page with v3 Pace inset group).
 use bm::settings::{BuildOrder, BuildSettings, FlightShape};
-use egui::{Align2, Color32, CornerRadius, FontId, Frame, Margin, Rect, RichText, Sense, Stroke, Ui, WidgetInfo, pos2, vec2};
+use egui::{Align2, CornerRadius, FontId, Frame, Margin, Rect, RichText, Sense, Stroke, Ui, WidgetInfo, pos2, vec2};
 
 use super::widgets::{
     SliderEvent, disclosure, footnote, hairline, inset_group, page_footer, parse_number, secondary_button,
@@ -393,7 +393,7 @@ fn paint_rhythm_bar(ui: &mut Ui, t: &Theme, flight_s: f64, gap_s: f64, hold_s: f
     let h = hold_s.max(0.0) as f32;
     let total = (3.0 * f + 2.0 * g + h).max(0.1);
     let (rect, _) = ui.allocate_exact_size(vec2(ui.available_width(), 12.0), Sense::hover());
-    ui.painter().rect_filled(rect, 4.0, Color32::from_white_alpha(12));
+    ui.painter().rect_filled(rect, 4.0, t.ink(12));
     let inner = rect.shrink2(vec2(2.0, 2.0));
     let mut x = inner.left();
     let w = inner.width();
@@ -410,7 +410,7 @@ fn paint_rhythm_bar(ui: &mut Ui, t: &Theme, flight_s: f64, gap_s: f64, hold_s: f
         let hw = ((h / total) * w).min((inner.right() - x).max(0.0));
         if hw >= 1.5 {
             let hold_r = Rect::from_min_size(pos2(x, inner.top()), vec2(hw, inner.height()));
-            ui.painter().rect_filled(hold_r, 2.5, Color32::from_rgba_unmultiplied(0xff, 0x9f, 0x43, 160));
+            ui.painter().rect_filled(hold_r, 2.5, t.accent_a(110));
         }
     }
     ui.label(
@@ -437,25 +437,25 @@ fn order_card(
     );
     resp.widget_info(|| WidgetInfo::selected(egui::Role::RadioButton, enabled, selected, title));
     let fill = if selected {
-        Color32::from_rgba_unmultiplied(t.accent.r(), t.accent.g(), t.accent.b(), if enabled { 34 } else { 16 })
+        t.accent_a(if enabled { 34 } else { 16 })
     } else if enabled && resp.hovered() {
-        Color32::from_white_alpha(18)
+        t.ink(18)
     } else {
-        Color32::from_white_alpha(10)
+        t.ink(10)
     };
     let stroke = if selected {
-        Stroke::new(1.5, if enabled { t.accent } else { Color32::from_white_alpha(40) })
+        Stroke::new(1.5, if enabled { t.accent } else { t.ink(40) })
     } else {
-        Stroke::new(0.5, Color32::from_white_alpha(18))
+        Stroke::new(0.5, t.ink(18))
     };
     ui.painter().rect(rect, CornerRadius::same(7), fill, stroke, egui::StrokeKind::Inside);
 
     // Mini illustration (top 40 px): stacked bricks + direction arrow.
     let cx = rect.center().x;
     let brick_fill = if selected && enabled {
-        Color32::from_rgba_unmultiplied(t.accent.r(), t.accent.g(), t.accent.b(), 150)
+        t.accent_a(150)
     } else {
-        Color32::from_white_alpha(if enabled { 55 } else { 28 })
+        t.ink(if enabled { 55 } else { 28 })
     };
     let top_y = rect.top() + 12.0;
     if take_apart {

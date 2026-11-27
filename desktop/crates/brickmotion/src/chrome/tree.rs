@@ -213,7 +213,7 @@ pub fn show(ui: &mut Ui, app: &mut BrickMotionApp, body_h: f32, pinned_h: bool) 
             }
             let dim = row.unused;
             let icon = if row.depth == 0 && !row.unused { Icon::Brick } else { Icon::Layers };
-            icons::paint(ui, icon, Rect::from_center_size(pos2(x + 26.0, y), vec2(14.0, 14.0)), 14.0, if row.depth == 0 && !dim { t.playhead } else { t.text3 });
+            icons::paint(ui, icon, Rect::from_center_size(pos2(x + 26.0, y), vec2(14.0, 14.0)), 14.0, if row.depth == 0 && !dim { t.text2 } else { t.text3 });
             let mut right = rect.right() - 8.0;
             let count = ui.painter().text(pos2(right, y), Align2::RIGHT_CENTER, row.pieces.to_string(), FontId::proportional(11.5), t.text3);
             right = count.left() - 6.0;

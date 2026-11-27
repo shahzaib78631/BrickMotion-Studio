@@ -1,6 +1,6 @@
 //! Snap Sound Properties page (m4-rulings.md: v2 page with v3 Mix inset group).
 use bm::settings::{PRESETS, SnapExample, SnapLibrary, SnapMix, SnapSource, snap_mix_preset};
-use egui::{Align2, Color32, CornerRadius, FontId, Frame, Margin, Rect, RichText, Sense, Stroke, Ui, WidgetInfo, pos2, vec2};
+use egui::{Align2, CornerRadius, FontId, Frame, Margin, Rect, RichText, Sense, Stroke, Ui, WidgetInfo, pos2, vec2};
 
 use super::widgets::{
     SliderEvent, disclosure, footnote, hairline, inset_group, page_footer, parse_number, pill_switch,
@@ -481,16 +481,16 @@ fn sample_tile(
     let (rect, resp) = ui.allocate_exact_size(size, Sense::click());
     resp.widget_info(|| WidgetInfo::labeled(egui::Role::Button, true, format!("Play {label} sample")));
     let fill = if active {
-        Color32::from_rgba_unmultiplied(t.accent.r(), t.accent.g(), t.accent.b(), 26)
+        t.accent_a(26)
     } else if resp.hovered() {
-        Color32::from_white_alpha(20)
+        t.ink(20)
     } else {
-        Color32::from_white_alpha(11)
+        t.ink(11)
     };
     let stroke = if active {
         Stroke::new(1.5, t.accent)
     } else {
-        Stroke::new(0.5, Color32::from_white_alpha(15))
+        Stroke::new(0.5, t.ink(15))
     };
     ui.painter().rect(rect, CornerRadius::same(8), fill, stroke, egui::StrokeKind::Inside);
 
@@ -503,7 +503,7 @@ fn sample_tile(
     // Bottom area: waveform (flat line until first played).
     let wave_rect = Rect::from_min_max(pos2(rect.left() + 8.0, rect.top() + 25.0), pos2(rect.right() - 8.0, rect.bottom() - 7.0));
     let cy = wave_rect.center().y;
-    let wave_color = if active { t.accent } else { Color32::from_white_alpha(90) };
+    let wave_color = if active { t.accent } else { t.ink(90) };
     if let Some(peaks) = waveform.filter(|p| !p.is_empty()) {
         let step = wave_rect.width() / peaks.len() as f32;
         let max_h = wave_rect.height() * 0.5;
@@ -513,7 +513,7 @@ fn sample_tile(
             ui.painter().line_segment([pos2(x, cy - h), pos2(x, cy + h)], Stroke::new(1.2, wave_color));
         }
     } else {
-        ui.painter().hline(wave_rect.x_range(), cy, Stroke::new(1.0, Color32::from_white_alpha(40)));
+        ui.painter().hline(wave_rect.x_range(), cy, Stroke::new(1.0, t.ink(40)));
     }
 
     resp.on_hover_text(format!("Hear {label} snap")).clicked()
@@ -523,16 +523,16 @@ fn preset_tile(ui: &mut Ui, t: &Theme, title: &str, active: bool, size: egui::Ve
     let (rect, resp) = ui.allocate_exact_size(size, Sense::click());
     resp.widget_info(|| WidgetInfo::selected(egui::Role::RadioButton, true, active, title));
     let fill = if active {
-        Color32::from_rgba_unmultiplied(t.accent.r(), t.accent.g(), t.accent.b(), 32)
+        t.accent_a(32)
     } else if resp.hovered() {
-        Color32::from_white_alpha(20)
+        t.ink(20)
     } else {
-        Color32::from_white_alpha(11)
+        t.ink(11)
     };
     let stroke = if active {
         Stroke::new(1.5, t.accent)
     } else {
-        Stroke::new(0.5, Color32::from_white_alpha(15))
+        Stroke::new(0.5, t.ink(15))
     };
     ui.painter().rect(rect, CornerRadius::same(7), fill, stroke, egui::StrokeKind::Inside);
     let fg = if active { t.text1 } else { t.text2 };

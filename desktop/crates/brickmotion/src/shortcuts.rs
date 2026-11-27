@@ -22,7 +22,7 @@ pub fn handle(app: &mut BrickMotionApp, ctx: &egui::Context) {
         || app.steps.editor.is_some()
         || app.replace.open
         || app.naming.is_some()
-        || app.shortcuts_open
+        || app.shortcuts_open || app.settings.open || app.about_open
         // An open menu or popup owns Esc and the arrow keys.
         || egui::Popup::is_any_open(ctx)
         || crate::chrome::widgets::slider_active(ctx);

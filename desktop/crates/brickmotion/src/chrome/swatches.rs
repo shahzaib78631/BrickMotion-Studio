@@ -216,7 +216,7 @@ fn swatch_tile(ui: &mut Ui, t: &Theme, c: &bm::ColorInfo, selected: bool) -> boo
     let label = format!("{} ({})", c.name, c.code);
     resp.widget_info(|| WidgetInfo::selected(egui::Role::Button, true, selected, &label));
 
-    let fill = Color32::from_rgb(c.rgb[0], c.rgb[1], c.rgb[2]);
+    let fill = Color32::from_rgb(c.rgb[0], c.rgb[1], c.rgb[2]); // data colour
     let p = ui.painter();
     if c.alpha < 0.99 {
         // Subtle two-tone backdrop for transparent colours so translucency reads cleanly.
@@ -224,7 +224,7 @@ fn swatch_tile(ui: &mut Ui, t: &Theme, c: &bm::ColorInfo, selected: bool) -> boo
         let half = Rect::from_min_max(rect.center(), rect.max);
         p.rect_filled(half, 2.0, t.bg3);
         let a = (c.alpha.clamp(0.25, 0.95) * 255.0).round() as u8;
-        p.rect_filled(rect, 4.0, Color32::from_rgba_unmultiplied(c.rgb[0], c.rgb[1], c.rgb[2], a));
+        p.rect_filled(rect, 4.0, Color32::from_rgba_unmultiplied(c.rgb[0], c.rgb[1], c.rgb[2], a)); // data colour
     } else {
         p.rect_filled(rect, 4.0, fill);
     }
@@ -234,7 +234,7 @@ fn swatch_tile(ui: &mut Ui, t: &Theme, c: &bm::ColorInfo, selected: bool) -> boo
     } else if resp.hovered() {
         Stroke::new(1.5, t.text1)
     } else {
-        Stroke::new(1.0, Color32::from_rgba_unmultiplied(255, 255, 255, 35))
+        Stroke::new(1.0, t.ink(35))
     };
     p.rect_stroke(rect, 4.0, stroke, StrokeKind::Inside);
 

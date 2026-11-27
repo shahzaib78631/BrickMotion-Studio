@@ -109,7 +109,7 @@ pub fn show(ui: &mut Ui, app: &mut BrickMotionApp) {
                 .stroke(Stroke::new(1.0, t.border2))
                 .corner_radius(10)
                 .inner_margin(Margin::same(8))
-                .shadow(egui::epaint::Shadow { offset: [0, 8], blur: 24, spread: 0, color: egui::Color32::from_black_alpha(110) })
+                .shadow(egui::epaint::Shadow { offset: [0, 8], blur: 24, spread: 0, color: t.shade(110) })
                 .show(ui, |ui| {
                     ui.set_width(WIDTH);
                     let field = ui.add(
