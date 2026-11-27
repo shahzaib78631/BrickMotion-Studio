@@ -13,6 +13,7 @@ booklet step pictures and candidate 3D LDraw renders:
 from __future__ import annotations
 
 import os
+from pathlib import Path
 import warnings
 from typing import Sequence
 
@@ -25,12 +26,55 @@ from .scorer import _edge_depth_map, _label_edges
 
 DINO_SIZE = 224
 DINO_GRID = 16  # 224 / 14
+SPATIAL_HEAD_PATH = Path(__file__).resolve().parents[3] / ".cache/booklet-mpd/dino-spatial-comparator.pt"
 _SINGLETON: "DinoPerceptor | None" = None
 _LOAD_FAILED = False
 
 
 def enabled() -> bool:
     return os.environ.get("BOOKLET_SOLVER_DINO", "1") != "0"
+
+
+def _sobel_norm(rgb: np.ndarray) -> np.ndarray:
+    g = cv2.cvtColor(rgb, cv2.COLOR_RGB2GRAY).astype(np.float32)
+    mag = np.hypot(cv2.Sobel(g, cv2.CV_32F, 1, 0, ksize=3), cv2.Sobel(g, cv2.CV_32F, 0, 1, ksize=3))
+    sc = max(float(np.percentile(mag, 98)), 25.0)
+    return np.clip(mag / sc, 0.0, 1.0)
+
+
+def _build_spatial_head():
+    import torch
+    import torch.nn as nn
+
+    class DinoSpatialHead(nn.Module):
+        """Compact ~38K-param FoundationPose-style spatial comparator over (B, 10, 16, 16) feature maps."""
+
+        def __init__(self, in_ch: int = 10):
+            super().__init__()
+            self.net = nn.Sequential(
+                nn.Conv2d(in_ch, 32, 3, padding=1, bias=False),
+                nn.BatchNorm2d(32),
+                nn.SiLU(inplace=True),
+                nn.Conv2d(32, 48, 3, stride=2, padding=1, bias=False),
+                nn.BatchNorm2d(48),
+                nn.SiLU(inplace=True),
+                nn.Conv2d(48, 64, 3, stride=2, padding=1, bias=False),
+                nn.BatchNorm2d(64),
+                nn.SiLU(inplace=True),
+            )
+            self.head = nn.Sequential(
+                nn.Linear(128, 32),
+                nn.SiLU(inplace=True),
+                nn.Dropout(0.15),
+                nn.Linear(32, 1),
+            )
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            f = self.net(x)
+            pooled = torch.cat([f.mean(dim=(2, 3)), f.amax(dim=(2, 3))], dim=1)
+            return self.head(pooled).squeeze(-1)
+
+    return DinoSpatialHead(10)
 
 
 def render_npr_rgb(lib, parts: list, view: View, shape: tuple[int, int],
@@ -134,20 +178,75 @@ class DinoPerceptor:
         self.model.eval().to(self.device)
         self.mean = torch.tensor([0.485, 0.456, 0.406], device=self.device).view(1, 3, 1, 1)
         self.std = torch.tensor([0.229, 0.224, 0.225], device=self.device).view(1, 3, 1, 1)
+        self.spatial_head = None
+        self.spatial_head_meta: dict = {}
+        if os.environ.get("BOOKLET_SOLVER_DINO_HEAD", "1") != "0" and SPATIAL_HEAD_PATH.exists():
+            try:
+                ckpt = torch.load(SPATIAL_HEAD_PATH, map_location="cpu", weights_only=False)
+                head = _build_spatial_head()
+                head.load_state_dict(ckpt["state_dict"])
+                head.eval().to(self.device)
+                self.spatial_head = head
+                self.spatial_head_meta = ckpt.get("meta", {})
+            except Exception:
+                self.spatial_head = None
+
+    def _score_spatial_head(self, pic_crop: np.ndarray, cand_crops: Sequence[np.ndarray],
+                            pt_pic: np.ndarray, pt_cands: np.ndarray,
+                            vis_mask_16: np.ndarray | None) -> np.ndarray | None:
+        """Run the FoundationPose-style `DinoSpatialHead` on `(K, 10, 16, 16)` reusing already-computed
+        DINOv2 `[7, 11]` patch tokens (`pt_pic`, `pt_cands`) at <0.5ms cost!"""
+        if self.spatial_head is None or not cand_crops:
+            return None
+        K = len(cand_crops)
+        # Reconstruct exact per-layer cosine maps from equal-energy concatenated 768-dim tokens
+        c7 = (2.0 * (pt_pic[None, :, :384] * pt_cands[:, :, :384]).sum(axis=-1)).reshape(K, DINO_GRID, DINO_GRID)
+        c11 = (2.0 * (pt_pic[None, :, 384:] * pt_cands[:, :, 384:]).sum(axis=-1)).reshape(K, DINO_GRID, DINO_GRID)
+        pe = _sobel_norm(pic_crop)
+        pe16 = cv2.resize(pe, (DINO_GRID, DINO_GRID), interpolation=cv2.INTER_AREA)
+        vm16 = (vis_mask_16.reshape(DINO_GRID, DINO_GRID).astype(np.float32)
+                if vis_mask_16 is not None else np.ones((DINO_GRID, DINO_GRID), dtype=np.float32))
+        feats = np.empty((K, 10, DINO_GRID, DINO_GRID), dtype=np.float32)
+        p_f = pic_crop.astype(np.float32)
+        for i, rc in enumerate(cand_crops):
+            diff16 = cv2.resize(np.abs(p_f - rc.astype(np.float32)) / 255.0,
+                                (DINO_GRID, DINO_GRID), interpolation=cv2.INTER_AREA).transpose(2, 0, 1)
+            re = _sobel_norm(rc)
+            re16 = cv2.resize(re, (DINO_GRID, DINO_GRID), interpolation=cv2.INTER_AREA)
+            ecorr16 = cv2.resize(pe * re, (DINO_GRID, DINO_GRID), interpolation=cv2.INTER_AREA)
+            feats[i, 0] = c7[i]
+            feats[i, 1] = c11[i]
+            feats[i, 2:5] = diff16
+            feats[i, 5] = ecorr16
+            feats[i, 6] = vm16
+            feats[i, 7] = pe16
+            feats[i, 8] = re16
+            feats[i, 9] = re16 - pe16
+        with self.torch.no_grad():
+            lg = self.spatial_head(self.torch.from_numpy(feats).to(self.device)).cpu().numpy().astype(np.float64)
+        # Smooth, bounded signal in [-0.5, +0.5] centered at 0
+        return (1.0 / (1.0 + np.exp(-np.clip(lg, -20.0, 20.0)))) - 0.5
 
     def encode_crops(self, crops_rgb: Sequence[np.ndarray]) -> tuple[np.ndarray, np.ndarray]:
-        """Encode a list of `(224, 224, 3)` uint8 RGB crops -> `(patches (N,256,384), cls (N,384))` L2-normed."""
+        """Encode `(224, 224, 3)` uint8 RGB crops -> `(patches (N,256,768), cls (N,384))` L2-normed.
+
+        Uses BOTH intermediate layer 7 (FoundPose-style sharp local geometric/edge orientation tokens)
+        and final layer 11 (semantic/part-identity tokens) in a single ~8ms MPS forward pass!
+        """
         torch = self.torch
         import torch.nn.functional as F
         if not crops_rgb:
-            return np.zeros((0, DINO_GRID * DINO_GRID, 384), np.float32), np.zeros((0, 384), np.float32)
+            return np.zeros((0, DINO_GRID * DINO_GRID, 768), np.float32), np.zeros((0, 384), np.float32)
         arr = np.stack(crops_rgb, axis=0).astype(np.float32) / 255.0
         x = torch.from_numpy(arr).permute(0, 3, 1, 2).to(self.device)
         x = (x - self.mean) / self.std
         with torch.no_grad():
-            feats = self.model.forward_features(x)
-            pt = F.normalize(feats["x_norm_patchtokens"], dim=-1).cpu().numpy()
-            cls = F.normalize(feats["x_norm_clstoken"], dim=-1).cpu().numpy()
+            layers = self.model.get_intermediate_layers(x, n=[7, 11], reshape=False, return_class_token=True, norm=True)
+            pt_mid = F.normalize(layers[0][0], dim=-1)
+            pt_hi = F.normalize(layers[1][0], dim=-1)
+            # Equal-energy concatenation so dot product = 0.5 * cos_mid + 0.5 * cos_hi!
+            pt = (torch.cat([pt_mid, pt_hi], dim=-1) * (0.5 ** 0.5)).cpu().numpy()
+            cls = F.normalize(layers[1][1], dim=-1).cpu().numpy()
         return pt, cls
 
     def score_renders(self, target_rgb: np.ndarray, target_fg: np.ndarray, bg: tuple[int, int, int],
@@ -157,9 +256,10 @@ class DinoPerceptor:
         """Return perceptual similarity in `[-1, 1]` for each candidate render against `target_rgb`.
 
         Combines:
-          - Foreground-weighted dense 16x16 DINOv2 patch cosine similarity on the whole-model crop.
+          - Foreground-weighted multi-layer (FoundPose layers 7+11) dense 16x16 DINOv2 patch cosine
+            similarity + CLS similarity on the whole-model crop.
           - If `focus_mask` is provided (e.g. union of newly placed parts across candidates), a 2x zoomed
-            local crop around the changed/new bricks for sharp discrimination of small local flips/shifts!
+            local crop weighted tightly on the newly added parts + fine gradient-magnitude alignment!
         """
         if not cand_rgbs:
             return np.zeros(0, dtype=np.float64)
@@ -169,6 +269,7 @@ class DinoPerceptor:
 
         has_local = focus_mask is not None and int(np.count_nonzero(focus_mask)) >= 16
         l_w = None
+        l_fg_w = None
         if has_local:
             # Expand local box to at least 64px and 1.6x focus span so DINOv2 has surrounding context!
             r0, c0, r1, c1 = _bbox_of(focus_mask, pad=0)
@@ -182,6 +283,7 @@ class DinoPerceptor:
             lw = min(target_rgb.shape[1], lbox[3]) - max(0, lbox[1])
             if max(lh, lw) < 0.85 * max(gh, gw):
                 tl_crop, l_w = _square_pad_crop(target_rgb, lbox, bg, mask=focus_mask)
+                _, l_fg_w = _square_pad_crop(target_rgb, lbox, bg, mask=target_fg)
                 crops.append(tl_crop)
                 crops.extend(_square_pad_crop(c, lbox, bg)[0] for c in cand_rgbs)
             else:
@@ -190,23 +292,29 @@ class DinoPerceptor:
         pt, cls = self.encode_crops(crops)
         k = len(cand_rgbs)
 
-        # Global weighted patch + CLS similarity
-        gw_vec = (g_w + 0.15) if g_w is not None else np.ones(DINO_GRID * DINO_GRID, np.float32)
+        # Global weighted multi-layer FoundPose [7, 11] patch + CLS similarity (strictly zero-shot;
+        # DinoSpatialHead was trained exclusively on local zoomed added_vis_mask crops!)
+        gw_vec = (g_w + 0.12) if g_w is not None else np.ones(DINO_GRID * DINO_GRID, np.float32)
         gw_vec = gw_vec / max(float(gw_vec.sum()), 1e-6)
         g_patch = ((pt[0:1] * pt[1:1 + k]).sum(axis=-1) * gw_vec[None, :]).sum(axis=-1)
         g_cls = (cls[0:1] * cls[1:1 + k]).sum(axis=-1)
-        score = 0.80 * g_patch + 0.20 * g_cls
+        score = 0.84 * g_patch + 0.16 * g_cls
 
         if has_local:
             off = 1 + k
-            lw_vec = (l_w + 0.25) if l_w is not None else np.ones(DINO_GRID * DINO_GRID, np.float32)
+            fg_ctx = (0.12 * l_fg_w) if l_fg_w is not None else 0.12
+            lw_vec = (l_w + fg_ctx + 0.02) if l_w is not None else np.ones(DINO_GRID * DINO_GRID, np.float32)
             lw_vec = lw_vec / max(float(lw_vec.sum()), 1e-6)
             l_patch = ((pt[off:off + 1] * pt[off + 1:off + 1 + k]).sum(axis=-1) * lw_vec[None, :]).sum(axis=-1)
             l_cls = (cls[off:off + 1] * cls[off + 1:off + 1 + k]).sum(axis=-1)
-            local_sc = 0.82 * l_patch + 0.18 * l_cls
-            score = 0.45 * score + 0.55 * local_sc
+            local_sc = 0.86 * l_patch + 0.14 * l_cls
+            if self.spatial_head is not None:
+                hl = self._score_spatial_head(crops[off], crops[off + 1:off + 1 + k], pt[off], pt[off + 1:off + 1 + k], l_w)
+                if hl is not None:
+                    local_sc = local_sc + 0.10 * hl
+            score = 0.40 * score + 0.60 * local_sc
 
-        return score.astype(np.float64)
+        return np.clip(score, -1.0, 1.0).astype(np.float64)
 
     def embed_page(self, rgb: np.ndarray, fg: np.ndarray, bg: tuple[int, int, int]) -> np.ndarray:
         """L2-normalized CLS embedding for a booklet step picture (for booklet-wide step-graph analysis)."""

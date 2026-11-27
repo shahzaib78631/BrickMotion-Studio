@@ -20,12 +20,16 @@ from brickgen.blueprint import (  # noqa: E402
     blueprint_rot_yaw90,
     compute_blueprint_scale,
     compute_causal_frontier_features,
+    mesh_to_blueprint,
     rasterize_blueprint,
     render_blueprint_preview,
     stb_20_to_blueprint16,
 )
+from brickgen.agent_builder import _extract_code, execute_bricklayer_script  # noqa: E402
+from brickgen.bricklayer import BrickBuild  # noqa: E402
 from brickgen.clip_encoder import ClipEncoder  # noqa: E402
 from brickgen.corpus import build_corpus  # noqa: E402
+from brickgen.dpo import train_dpo  # noqa: E402
 from brickgen.generate import BrickGenerator  # noqa: E402
 from brickgen.geometry import (  # noqa: E402
     ROT24,
@@ -336,3 +340,122 @@ def test_end_to_end_tiny_corpus_overfit_and_zero_overlap_generate(tmp_path: Path
     assert out_txt.check.pieces >= 8
     assert out_txt.check.overlaps == 0
     assert out_txt.check.groups == 1
+
+    # Smoke-test Offline Reward-Guided DPO fine-tuning on synthetic preference pairs!
+    def _dummy_side(prefix: str, seed_off: int) -> dict[str, np.ndarray]:
+        L = 8
+        xyz = np.zeros((L, 3), dtype=np.float16)
+        xyz[:, 1] = np.arange(L, dtype=np.float16) * 24.0
+        bb = np.zeros((L, 6), dtype=np.float16)
+        bb[:, 0], bb[:, 3] = -20.0, 20.0
+        bb[:, 1], bb[:, 4] = xyz[:, 1], xyz[:, 1] + 24.0
+        bb[:, 2], bb[:, 5] = -20.0, 20.0
+        r6 = np.tile(np.array([1, 0, 0, 0, 1, 0], dtype=np.float16), (L, 1))
+        g = np.zeros((2, 5, BP_G, BP_G, BP_G), dtype=np.float16)
+        g[:, 0, 6:10, 0:6, 6:10] = 1.0
+        g[:, 1, 6:10, 0:6, 6:10] = 0.8
+        sv = np.tile(np.array([40.0, 192.0, 40.0, 192.0], dtype=np.float32), (2, 1))
+        return {
+            f"{prefix}_part_id": np.full(2 * L, seed_off, dtype=np.int16),
+            f"{prefix}_color_id": np.ones(2 * L, dtype=np.int16),
+            f"{prefix}_parent": np.concatenate([np.arange(-1, L - 1, dtype=np.int16)] * 2),
+            f"{prefix}_xyz": np.concatenate([xyz, xyz], axis=0),
+            f"{prefix}_rot24": np.zeros(2 * L, dtype=np.int8),
+            f"{prefix}_rot6d": np.concatenate([r6, r6], axis=0),
+            f"{prefix}_bbox": np.concatenate([bb, bb], axis=0),
+            f"{prefix}_seq_ptr": np.array([0, L, 2 * L], dtype=np.int64),
+            f"{prefix}_bp_grid": g,
+            f"{prefix}_bp_scale": sv,
+        }
+
+    pairs_p = tmp_path / "dpo_pairs.npz"
+    cids, clens = gen.clip.tokenize(["a red LEGO tower", "a blue LEGO car"])
+    payload = {}
+    payload.update(_dummy_side("w", 0))
+    payload.update(_dummy_side("l", 1))
+    payload["clip_tokens"] = cids.astype(np.uint16)
+    payload["clip_lengths"] = clens.astype(np.int16)
+    payload["rewards"] = np.array([[5.0, 2.0], [4.5, 1.5]], dtype=np.float32)
+    np.savez_compressed(pairs_p, **payload)
+
+    dpo_out = tmp_path / "brickgen_dpo.pt"
+    dpo_res = train_dpo(s2_dir / "brickgen.pt", pairs_p, dpo_out, steps=4, batch_size=2, lr=1e-4, log_every=2)
+    assert dpo_out.exists()
+    assert dpo_res["metrics"]["loss"] > 0.0
+
+
+def test_bricklayer_sdk_and_mesh_to_blueprint(tmp_path: Path):
+    """Verify BrickLayer-Studio native placement, symmetry, snapping, rollback, and external .obj/.stl voxelization."""
+    with BrickBuild("Unit Test Tower", prompt="A tiny red and gray test tower") as b:
+        d = b.part_dims("3031")
+        assert d["has_mesh"] and d["studs_x"] == 4.0 and d["studs_z"] == 4.0
+        b.step("base")
+        base = b.place("3031", "dark_bluish_gray", x=0, y=0, z=0, tag="base")
+        b.step("walls")
+        b.place_sym("3004", "red", x=1.0, y=1, z=1.5, yaw=0, tag="wall")
+        b.place_sym("3004", "red", x=1.0, y=1, z=-1.5, yaw=0, tag="wall")
+        ck = b.checkpoint()
+        with pytest.raises(ValueError, match="Collision"):
+            b.place("3004", "blue", x=1.0, y=1, z=1.5, yaw=0)
+        b.place("3031", "light_bluish_gray", x=0, y=4, z=0, tag="cap")
+        assert len(b.bricks) == ck + 1
+        b.rollback(ck)
+        assert len(b.bricks) == ck
+        # Snap cap directly via native libbmcore solver
+        b.snap("3020", "red", on="wall", near=(0, 4.5, 1.5), tag="lintel")
+        rep = b.validate()
+        assert rep.check.overlaps == 0
+        assert rep.check.groups == 1
+        assert rep.check.stands
+        assert rep.symmetry_score >= 0.99
+        ldr_p = b.save_ldr(tmp_path / "unit_tower.ldr")
+        assert ldr_p.exists() and "0 STEP" in ldr_p.read_text()
+
+    # Create a tiny colored Wavefront .obj cube and verify mesh_to_blueprint() voxelization & interior fill!
+    obj_p = tmp_path / "box.obj"
+    obj_p.write_text(
+        "\n".join(
+            [
+                "v -1 0 -2 0.85 0.10 0.10",
+                "v  1 0 -2 0.85 0.10 0.10",
+                "v  1 0  2 0.85 0.10 0.10",
+                "v -1 0  2 0.85 0.10 0.10",
+                "v -1 1 -2 0.85 0.10 0.10",
+                "v  1 1 -2 0.85 0.10 0.10",
+                "v  1 1  2 0.85 0.10 0.10",
+                "v -1 1  2 0.85 0.10 0.10",
+                "f 1 2 3 4",
+                "f 5 6 7 8",
+                "f 1 2 6 5",
+                "f 2 3 7 6",
+                "f 3 4 8 7",
+                "f 4 1 5 8",
+            ]
+        )
+        + "\n"
+    )
+    grid, sv, n_tris = mesh_to_blueprint(obj_p, g=BP_G, target_span_ldu=240.0)
+    assert n_tris == 12
+    assert grid.shape == (5, BP_G, BP_G, BP_G)
+    assert grid[0].sum() > 100
+    assert grid[0, :, 0, :].any()  # grounded at iy = 0!
+    assert abs(float(sv[2]) - 240.0) < 1e-2  # longest axis scaled to 240 LDU (12 studs)
+    # Red vertex color preserved inside occupied voxels
+    occ = grid[0] > 0.5
+    assert float(grid[1][occ].mean()) > 0.7 and float(grid[2][occ].mean()) < 0.25
+
+    # Verify BrickLayer-Agent safe sandboxed code extraction + libbmcore execution
+    sample_reply = (
+        "Here is your build:\n```python\n"
+        "def build(b):\n"
+        "    b.step('base')\n"
+        "    b.place('3031', 'dark_bluish_gray', x=0, y=0, z=0)\n"
+        "    b.place_sym('3004', 'red', x=1.0, y=1, z=1.5)\n"
+        "    b.place_sym('3004', 'red', x=1.0, y=1, z=-1.5)\n"
+        "```\n"
+    )
+    code = _extract_code(sample_reply)
+    ab, arep, aerr = execute_bricklayer_script(code, title="Agent Test", prompt="test")
+    assert aerr is None and ab is not None and arep is not None
+    assert arep.check.certified and arep.check.pieces == 5
+    ab.close()

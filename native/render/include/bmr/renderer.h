@@ -38,6 +38,9 @@ struct FrameOptions {
   bool neuralShader = false;
   /// Live progressive hardware-RT path tracing (exact bmexport quality, converging over frames with Metal OIDN).
   bool pathTraced = false;
+  /// Modern Real-Time Path Tracing (ReSTIR DI + SHaRC World-Space Radiance Cache + Dual-Lobe Glossy RT
+  /// + Ray-Traced Floor Shadow Catcher + Multi-Bounce Glass + Demodulated SVGF + Halton TAA/Progressive).
+  bool realtimePathTrace = false;
   int pathMaxSamples = 64;
   int pathSamplesPerFrame = 2;
   bool cull = true;      ///< leave out what is not in view

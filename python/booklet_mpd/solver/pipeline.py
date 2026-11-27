@@ -133,24 +133,35 @@ def _attach_assembly(lib, host_parts: list, sub_parts: list, rgb: np.ndarray, pt
     pre = [(scored_u[i][0], T_list[i]) for i in range(len(T_list))]
     pre.sort(key=lambda x: -x[0])
 
-    # 4. Exact collision check + exact ModelScorer ranking on top non-colliding attachments
+    # 4. Exact collision check + exact ModelScorer + physical mates + DINOv2 tie-break on top attachments
     if collider is not None:
         collider.set_model(host_parts)
-    best = None
-    checked = 0
+    has_nat_att = collider is not None and getattr(collider, "native", None) is not None
+    cands_att = []
     for _sv, T_world in pre[:96]:
         moved = [(p, c, T_world @ np.asarray(m, float)) for p, c, m in sub_parts]
         if collider is not None and any(collider.hits(p, m) for p, _c, m in moved):
             continue
-        sc = scorer.score(moved)
-        checked += 1
-        if best is None or sc > best[0]:
-            best = (sc, T_world, moved)
-        if checked >= 16:
+        sc = float(scorer.score(moved))
+        m_cnt = sum(int(collider.mates(p, m)[0]) for p, _c, m in moved) if has_nat_att else 0
+        cands_att.append((sc + 14.0 * min(m_cnt, 10), sc, T_world, moved))
+        if len(cands_att) >= 16:
             break
-    if best is None:
+    if not cands_att:
         return None
-    sc, T_world, moved = best
+    cands_att.sort(key=lambda x: -x[0])
+    # Break close top-4 attachment ties using zero-shot DINOv2 (critical on symmetric black display stands!)
+    norm = max(1.0, float(scorer.fg.sum() + scorer.ink_fg.sum()))
+    if len(cands_att) >= 2 and (cands_att[0][0] - cands_att[1][0]) < 0.08 * norm:
+        from . import vision_prior
+        if vision_prior.enabled():
+            top_a = cands_att[:min(4, len(cands_att))]
+            d_a = vision_prior.score_candidate_layouts(lib, host_parts, [x[3] for x in top_a], pic, view)
+            if d_a is not None and len(d_a) == len(top_a):
+                d_adj = d_a - float(np.mean(d_a))
+                ord_a = sorted(range(len(top_a)), key=lambda i: -(top_a[i][0] + 0.65 * norm * float(d_adj[i])))
+                cands_att = [top_a[i] for i in ord_a] + cands_att[len(top_a):]
+    _rk, sc, T_world, moved = cands_att[0]
     merged_parts = host_parts + moved
     iou0 = float(view_fit_metrics(lib, merged_parts, pic, view)[0])
     rv = refine_view(lib, merged_parts, pic, view, scale_tol=0.06, outer=2)
@@ -159,7 +170,6 @@ def _attach_assembly(lib, host_parts: list, sub_parts: list, rgb: np.ndarray, pt
         view, iou = rv, iou1
     else:
         iou = iou0
-    norm = max(1.0, float(scorer.fg.sum() + scorer.ink_fg.sum()))
     return T_world, view, float(iou), host_alone_iou, float(sc / norm + 1.0)
 
 
@@ -291,23 +301,34 @@ def run(lib, pdf: Path, extract_data: dict, folder: Path, index: dict, collider=
                     pass
 
             # Early-step multi-step trajectory beam (K=4 across first 4 steps of each assembly)
-            # Resolves symmetric step-1/2 flips (e.g. 41488 4x4 plate, 41605 2x2 pair) using step 2-4 + DINOv2 evidence!
+            # Resolves symmetric step-1/2 flips (e.g. 41488 4x4 plate, 41605 2x2 pair, 40348 flush plates)
+            # using step 2-4 + DINOv2 evidence! Always clears `early_beams` whenever a step skips beaming
+            # (e.g. a sub-build panel on step 3) so stale early snapshots can NEVER overwrite later steps!
             if (not switched_early and early_beams and len(early_beams) >= 1 and not area_dropped
-                    and len(read.parts) <= 5 and not subs and rgb is not None
+                    and len(read.parts) <= 7 and not subs and rgb is not None
                     and len(assemblies[active_idx]["step_indices"]) < 4):
                 new_beams = []
                 seen_b = set()
                 n_prev_steps = len(assemblies[active_idx]["step_indices"])
                 for b in early_beams:
+                    # On steps 3-4 (after step 2 already fanned out all orientations!), pass each trajectory's
+                    # own last camera as prior so trajectories stay fast (~2s instead of 18s each!) unless
+                    # the booklet actually rotates the model!
+                    b_cam = None
+                    if n_prev_steps >= 2 and b["step_scores"]:
+                        last_si_b = max(b["step_scores"])
+                        _lsc, lv, loi, lcomp, _liou, _lres = b["step_scores"][last_si_b]
+                        if lv is not None and lcomp:
+                            b_cam = (lv, loi, float(lcomp))
                     try:
                         b_res = solve(lib, b["asm_parts"], list(read.parts), rgb, pts, collider=collider, subbuilds=subs,
-                                      beam=5, prev_rgb=prev_rgb, prev_pts=prev_pts, next_rgb=next_rgb, next_pts=next_pts)
+                                      beam=5, camera=b_cam, prev_rgb=prev_rgb, prev_pts=prev_pts, next_rgb=next_rgb, next_pts=next_pts)
                     except Exception:
                         continue
                     # Branch into orientation-diverse hypotheses ONLY on step 2 (n_prev_steps == 1);
                     # afterwards extend each distinct trajectory with its best continuation (n_exp = 1)
                     # so one hypothesis's runner-up cannot duplicate and evict a competing orientation!
-                    n_exp = 4 if n_prev_steps == 1 else 1
+                    n_exp = (3 if len(early_beams) >= 2 else 4) if n_prev_steps == 1 else 1
                     cands_b = b_res.early_branches[:n_exp] if (n_exp > 1 and b_res.early_branches) else [
                         (list(b_res.placed), list(b_res.scores), b_res.view, b_res.orientation_index, float(b_res.completed))
                     ]
@@ -397,6 +418,9 @@ def run(lib, pdf: Path, extract_data: dict, folder: Path, index: dict, collider=
                     early_beams = None
 
             if not switched_early:
+                # Any step that does not extend `early_beams` immediately ends the early beam so
+                # stale snapshots can NEVER re-enter on a later step and wipe intermediate steps!
+                early_beams = None
                 try:
                     result = solve(lib, cur_parts, list(read.parts), rgb, pts, collider=collider, subbuilds=subs,
                                    camera=section.prior(active_idx) if cur_parts else None,
@@ -539,11 +563,12 @@ def run(lib, pdf: Path, extract_data: dict, folder: Path, index: dict, collider=
                         row["assembly"] = active_idx
                         early_beams = None
 
-            # Seed early-step trajectory beam on step 0 of any new assembly.
+            # Seed early-step trajectory beam on step 0 of any new assembly (INCLUDING 1-part starts
+            # such as a standalone 6x6 display stand baseplate `3958` so steps 2-4 resolve its frame!).
             # Deduplicate by 3D rigid shape (up to 90-deg Y-rotations of the frame-free step 0 model!)
             # so identical 90-deg-rotated copies don't duplicate and evict true step-2 orientations!
             if (not cur_parts and result is not None and status == "ok" and result.placed
-                    and 2 <= len(read.parts) <= 4 and not subs and result.early_branches):
+                    and 1 <= len(read.parts) <= 4 and not subs and result.early_branches):
                 from .subbuild import _turn
                 early_beams = []
                 seen_rigid = set()
@@ -553,7 +578,8 @@ def run(lib, pdf: Path, extract_data: dict, folder: Path, index: dict, collider=
                     for k_r in range(4):
                         tk = _turn(k_r)
                         pts_k = sorted(
-                            (p, c, tuple(np.round((tk @ np.asarray(m, float))[:3, 3], 1)))
+                            (p, c, tuple(np.round((tk @ np.asarray(m, float))[:3, 3], 1)),
+                             tuple(np.round((tk @ np.asarray(m, float))[:3, :3].ravel(), 1)))
                             for p, c, m in b_pl
                         )
                         key_k = tuple(pts_k)
@@ -572,7 +598,7 @@ def run(lib, pdf: Path, extract_data: dict, folder: Path, index: dict, collider=
                         "cum_comp": b_comp,
                         "last_oi": b_oi,
                     })
-                    if len(early_beams) >= 2:
+                    if len(early_beams) >= 3:
                         break
                 # Even if step 0 has only 1 unique rigid geometry (e.g. 41488 3031+3020), keep
                 # early_beams active with length 1 so step 1 expands all 4 orientation hypotheses!
@@ -618,24 +644,30 @@ def run(lib, pdf: Path, extract_data: dict, folder: Path, index: dict, collider=
                 out.failed_from = si + 1
         else:
             # No new parts read: check if this is a pure sub-assembly merge step (e.g. props/figure onto baseplate!).
-            # Test ALL live assembly pairs (prioritising pairs involving `active_idx`, then all other pairs such as
-            # merging the completed main figure onto the completed stand on the final booklet page!).
-            live_ids = [i for i, a in enumerate(assemblies) if a["parts"]]
-            if rgb is not None and len(live_ids) >= 2:
+            # Loop while >= 2 live assemblies remain so final booklet pages merging MULTIPLE sub-assemblies
+            # (e.g. figure + stand + side props/balloons in 40348 s43!) attach ALL of them cleanly!
+            merged_events = []
+            last_att_iou = None
+            while rgb is not None:
+                live_ids = [i for i, a in enumerate(assemblies) if a["parts"]]
+                if len(live_ids) < 2:
+                    break
                 pair_order = []
                 for a_i in live_ids:
                     for b_i in live_ids:
                         if a_i < b_i:
                             involves_active = (a_i == active_idx or b_i == active_idx)
-                            pair_order.append((0 if involves_active else 1, a_i, b_i))
+                            # Try larger pairs first so figure+stand merges before small side props!
+                            sz_sum = len(assemblies[a_i]["parts"]) + len(assemblies[b_i]["parts"])
+                            pair_order.append((0 if involves_active else 1, -sz_sum, a_i, b_i))
                 pair_order.sort()
                 best_merge = None   # (att_iou, sc, host_i, sub_i, T_att, v_att)
-                for _prio, a_i, b_i in pair_order:
+                for _prio, _neg_sz, a_i, b_i in pair_order:
                     # Register the larger assembly as host first; also try reversed when sizes are comparable
                     if len(assemblies[a_i]["parts"]) >= len(assemblies[b_i]["parts"]):
-                        order_hs = [(a_i, b_i), (b_i, a_i)]
+                        order_hs = [(a_i, b_i), (b_i, a_i)] if len(assemblies[b_i]["parts"]) >= 0.4 * len(assemblies[a_i]["parts"]) else [(a_i, b_i)]
                     else:
-                        order_hs = [(b_i, a_i), (a_i, b_i)]
+                        order_hs = [(b_i, a_i), (a_i, b_i)] if len(assemblies[a_i]["parts"]) >= 0.4 * len(assemblies[b_i]["parts"]) else [(b_i, a_i)]
                     for host_i, sub_i in order_hs:
                         try:
                             att = _attach_assembly(lib, assemblies[host_i]["parts"], assemblies[sub_i]["parts"],
@@ -645,37 +677,46 @@ def run(lib, pdf: Path, extract_data: dict, folder: Path, index: dict, collider=
                         if att is None:
                             continue
                         T_att, v_att, att_iou, host_iou, sc_att = att
-                        # Require strong post-merge silhouette match AND genuine improvement over host alone
-                        if att_iou >= 0.72 and att_iou >= host_iou + 0.04:
+                        # Size-aware acceptance: small props (<= 16 parts) only contribute a few percent of
+                        # whole-model silhouette area, so require smaller IoU gain (+0.005) + strictly positive
+                        # ModelScorer confirmation (`sc_att > 1.002`)!
+                        n_sub_p = len(assemblies[sub_i]["parts"])
+                        min_gain = 0.005 if n_sub_p <= 16 else 0.035
+                        min_iou = 0.70 if n_sub_p <= 16 else 0.72
+                        if att_iou >= min_iou and att_iou >= host_iou + min_gain and (n_sub_p > 16 or sc_att > 1.002):
                             if best_merge is None or (att_iou, sc_att) > (best_merge[0], best_merge[1]):
                                 best_merge = (att_iou, sc_att, host_i, sub_i, T_att, v_att)
-                            if att_iou >= 0.86:
+                            if att_iou >= 0.88:
                                 break
-                    if best_merge is not None and best_merge[0] >= 0.86:
+                    if best_merge is not None and best_merge[0] >= 0.88:
                         break
-                if best_merge is not None:
-                    att_iou, _sc_m, host_i, sub_i, T_att, v_att = best_merge
-                    sub_sis_snap = [s2 for s2 in assemblies[sub_i]["step_indices"] if out.groups[s2]]
-                    sub_ious = [float(out.rows[s2].get("post_fit_iou") or 0.0) for s2 in sub_sis_snap if s2 < len(out.rows)]
-                    merge_records.append({
-                        "id": sub_i,
-                        "step_indices": list(sub_sis_snap),
-                        "local_parts": list(assemblies[sub_i]["parts"]),
-                        "mean_iou": float(np.mean(sub_ious)) if sub_ious else 0.0,
-                        "merge_si": si,
-                        "host_steps_before": [s2 for s2 in assemblies[host_i]["step_indices"] if out.groups[s2]],
-                    })
-                    if v_att is not None:
-                        step_views[si] = v_att
-                    _transform_assembly(sub_i, T_att)
-                    assemblies[host_i]["parts"].extend(assemblies[sub_i]["parts"])
-                    assemblies[host_i]["step_indices"].extend(assemblies[sub_i]["step_indices"])
-                    assemblies[sub_i]["parts"] = []
-                    assemblies[sub_i]["step_indices"] = []
-                    active_idx = host_i
-                    row["assembly"] = active_idx
-                    row["assembly_event"] = f"merged_{sub_i}_into_{host_i}"
-                    row["post_fit_iou"] = float(att_iou)
+                if best_merge is None:
+                    break
+                att_iou, _sc_m, host_i, sub_i, T_att, v_att = best_merge
+                sub_sis_snap = [s2 for s2 in assemblies[sub_i]["step_indices"] if out.groups[s2]]
+                sub_ious = [float(out.rows[s2].get("post_fit_iou") or 0.0) for s2 in sub_sis_snap if s2 < len(out.rows)]
+                merge_records.append({
+                    "id": sub_i,
+                    "step_indices": list(sub_sis_snap),
+                    "local_parts": list(assemblies[sub_i]["parts"]),
+                    "mean_iou": float(np.mean(sub_ious)) if sub_ious else 0.0,
+                    "merge_si": si,
+                    "host_steps_before": [s2 for s2 in assemblies[host_i]["step_indices"] if out.groups[s2]],
+                })
+                if v_att is not None:
+                    step_views[si] = v_att
+                _transform_assembly(sub_i, T_att)
+                assemblies[host_i]["parts"].extend(assemblies[sub_i]["parts"])
+                assemblies[host_i]["step_indices"].extend(assemblies[sub_i]["step_indices"])
+                assemblies[sub_i]["parts"] = []
+                assemblies[sub_i]["step_indices"] = []
+                active_idx = host_i
+                merged_events.append(f"merged_{sub_i}_into_{host_i}")
+                last_att_iou = float(att_iou)
+            if merged_events:
+                row["assembly"] = active_idx
+                row["assembly_event"] = "+".join(merged_events)
+                row["post_fit_iou"] = last_att_iou
             row["status"] = "no parts read"
             prev_step_info = None
             early_beams = None
@@ -711,12 +752,14 @@ def run(lib, pdf: Path, extract_data: dict, folder: Path, index: dict, collider=
             polish_bilateral_symmetry_multiview,
             refine_multiview_hindsight,
             refine_subassembly_merges,
+            scanet_multiview_correct,
             unwind_articulation_twists,
         )
         go_passes = [
             ("merges", lambda: refine_subassembly_merges(lib, merge_records, assemblies, out, step_pics, step_views, collider=collider, log=log)),
             ("twists", lambda: unwind_articulation_twists(lib, assemblies, out, step_pics, steps_parts, step_views, collider=collider, log=log)),
             ("hindsight", lambda: refine_multiview_hindsight(lib, assemblies, out, step_pics, step_views, step_alts, collider=collider, log=log)),
+            ("scanet", lambda: scanet_multiview_correct(lib, assemblies, out, step_pics, step_views, step_alts, collider=collider, log=log)),
         ]
         if os.environ.get("BOOKLET_SOLVER_SYM_POLISH", "0") == "1":
             go_passes.append(("symmetry", lambda: polish_bilateral_symmetry_multiview(lib, assemblies, out, step_pics, step_views, collider=collider, log=log)))

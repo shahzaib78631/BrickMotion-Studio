@@ -121,8 +121,9 @@ struct SceneCameras {
 };
 
 /// How the picture is shaded. One at a time, as bmview's keys: each is a different renderer path.
-/// Ray-traced glass and path tracing are drawn while the view is still, and in every export.
-enum class Shading { Standard, Studio, Neural, HybridRT, ScreenSpaceGI, PathTraced };
+/// Ray-traced glass and offline path tracing are drawn while the view is still; Live Path Traced
+/// (RealTimePathTraced) runs continuously during orbiting and playback and refines when still.
+enum class Shading { Standard, Studio, Neural, HybridRT, ScreenSpaceGI, PathTraced, RealTimePathTraced };
 
 /// How the project looks, in the editor and every export. Saved in the project: the scene
 /// (`settings.video.studioLook`), edges (`edgeLines`) and AO and floor (`materials`) with the

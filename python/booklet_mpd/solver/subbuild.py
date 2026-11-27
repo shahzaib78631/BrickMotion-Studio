@@ -462,8 +462,9 @@ def _solve_unit_staged(lib, spec: dict, canon_views: list, scale: float, bases: 
             def _pick_key(x):
                 mdm = max_dm_by_part.get((x[3], x[4]), 1)
                 if is_exp:
-                    # On exploded mini-steps, still prefer full multi-stud seating over 1-stud cantilevers!
-                    exp_mate = (0.14 * (float(x[8]) / float(mdm)) - (0.10 if x[8] <= 1 else 0.0)) if mdm >= 2 else 0.0
+                    # On exploded mini-steps, still strongly prefer full multi-stud seating (`dm == mdm`)
+                    # over cantilevered overhangs (e.g. 2x2 plate sitting 4-stud flush vs 2-stud offset in 40271 s5)!
+                    exp_mate = (0.28 * (float(x[8]) / float(mdm)) - (0.14 if x[8] < mdm else 0.0)) if mdm >= 2 else 0.0
                     return x[0] + exp_mate + (0.06 if x[4] in need_new else 0.0)
                 if mdm >= 2:
                     # Strongly favour full multi-stud seating (+0.18) over 1-stud cantilevers (-0.16)
@@ -568,7 +569,7 @@ def _solve_unit_staged(lib, spec: dict, canon_views: list, scale: float, bases: 
             # Physical multi-stud seating density breaks isometric-ray ties among multi-part states
             # WITHOUT penalising 1-part stage-0 bases (`len(ps) == 1` has no mates yet, so never give
             # bogus extra additions on mini-step 1 a fake mate bonus over keeping the single base part!).
-            mates_dens = (_mates_count(ps) / max(1, len(ps))) if (not is_exp and len(ps) >= 2) else (1.35 if is_stage0 else 0.0)
+            mates_dens = (_mates_count(ps) / max(1, len(ps))) if len(ps) >= 2 else (1.35 if is_stage0 else 0.0)
             # Gentle layer-flatness bonus when multiple parts are added on a non-exploded stage:
             # discourages stacking 2-high on one half of a plate when a flush 1-plate layer fits!
             added_ys = [float(np.asarray(m, float)[1, 3]) for _p, _c, m in ps[len(parts_in):]]
@@ -720,7 +721,9 @@ def _solve_unit_staged(lib, spec: dict, canon_views: list, scale: float, bases: 
                         return fl
                 return [c_item for _d, c_item in dm_list]
 
-            # On upright exploded final stages, also strip upside-down placements when upright exist
+            # On upright exploded final stages, prefer upright + full multi-stud flush seating first
+            # (stops 2x2 plates from cantilevering 1 stud sideways on exploded mini-steps like 40271 s5!),
+            # falling back to unrestricted upright candidates if flush seating doesn't explain the panel!
             def _upright_cand(part, model):
                 res = cached_cand(part, model)
                 if float(np.asarray(cv_use.orientation, float)[1, 1]) > 0.5:
@@ -729,7 +732,29 @@ def _solve_unit_staged(lib, spec: dict, canon_views: list, scale: float, bases: 
                         return up_r
                 return res
 
-            cand_passes = [(_flush_cand, True)] if (not is_exp_f and has_native_col) else [(_upright_cand, False)]
+            def _upright_flush_cand(part, model):
+                res = _upright_cand(part, model)
+                if not has_native_col or len(res) <= 4:
+                    return res
+                collider.set_model(model)
+                dm_list = []
+                for c_item in res:
+                    m_i = np.asarray(c_item["matrix"], float)
+                    if collider.hits(part, m_i):
+                        continue
+                    dm_list.append((int(collider.mates(part, m_i)[0]), c_item))
+                if not dm_list:
+                    return res
+                max_dm_f = max(d for d, _c in dm_list)
+                if max_dm_f >= 2:
+                    fl = [c_item for d, c_item in dm_list if d >= max_dm_f]
+                    if fl:
+                        return fl
+                return [c_item for _d, c_item in dm_list]
+
+            cand_passes = [(_flush_cand, True)] if (not is_exp_f and has_native_col) else (
+                [(_upright_flush_cand, True)] if has_native_col else [(_upright_cand, False)]
+            )
             # Structural-before-finishing split on final stage too: if remaining `r_b` mixes structural
             # stud-bearing parts with studless finishing slopes/tiles, seat structural parts first so
             # finishing slopes cannot steal studs needed by structural plates (e.g. 41605 s20 st4)!
@@ -794,13 +819,13 @@ def _solve_unit_staged(lib, spec: dict, canon_views: list, scale: float, bases: 
                             v_c = v_f2
                     ms_c, ex_c, pr_c = _unit_metrics(lib, dr_c, v_c, pic_f, all_codes)
                     mt_c = (_mates_count([(p, c, m) for p, c, m, _d in u4_c]) / max(1, len(u4_c))) if len(u4_c) >= 2 else 0.0
-                    key_c = ms_c + (0.20 * mt_c if not is_exp_f else 0.0) + (0.25 if len(u4_c) == len(per_copy) else 0.0)
+                    key_c = ms_c + (0.20 * mt_c if not is_exp_f else 0.14 * mt_c) + (0.25 if len(u4_c) == len(per_copy) else 0.0)
                     item_c = (key_c, u4_c, ms_c, ex_c, pr_c, mt_c)
                     evals_st.append(item_c)
                     if best_st_eval is None or key_c > best_st_eval[0]:
                         best_st_eval = item_c
                 if is_fl_pass and (best_st_eval is None or best_st_eval[3] < 0.84 or best_st_eval[4] < 0.86 or len(best_st_eval[1]) < len(per_copy)):
-                    cand_passes.append((cached_cand, False))
+                    cand_passes.append((_upright_cand if is_exp_f else cached_cand, False))
             if not evals_st:
                 return []
             evals_st.sort(key=lambda x: -x[0])
@@ -808,7 +833,7 @@ def _solve_unit_staged(lib, spec: dict, canon_views: list, scale: float, bases: 
             for _kc, unit_4, ms_f, exp_f, prec_f, mates_f in evals_st[:2]:
                 complete_bonus = 0.25 if len(unit_4) == len(per_copy) else 0.0
                 avg_prev = cum_ms / max(1, K - 1)
-                rank_sc = 0.65 * ms_f + 0.35 * avg_prev + (0.18 * mates_f if not is_exp_f else 0.05 * mates_f) + complete_bonus
+                rank_sc = 0.65 * ms_f + 0.35 * avg_prev + (0.18 * mates_f if not is_exp_f else 0.14 * mates_f) + complete_bonus
                 all_good = (len(unit_4) == len(per_copy) and min(min_e, exp_f) >= 0.78 and min(min_p, prec_f) >= 0.85)
                 out_ev.append((rank_sc, ms_f, unit_4, exp_f, prec_f, all_good))
             return out_ev
@@ -819,7 +844,7 @@ def _solve_unit_staged(lib, spec: dict, canon_views: list, scale: float, bases: 
             mates_f = (_mates_count([(p, c, m) for p, c, m, _d in unit_4]) / max(1, len(unit_4))) if len(unit_4) >= 2 else 0.0
             complete_bonus = 0.25 if len(unit_4) == len(per_copy) else 0.0
             avg_prev = cum_ms / max(1, K - 1)
-            rank_sc = 0.65 * ms_f + 0.35 * avg_prev + (0.18 * mates_f if not is_exp_f else 0.05 * mates_f) + complete_bonus
+            rank_sc = 0.65 * ms_f + 0.35 * avg_prev + (0.18 * mates_f if not is_exp_f else 0.14 * mates_f) + complete_bonus
             all_good = (len(unit_4) == len(per_copy) and min(min_e, exp_f) >= 0.78 and min(min_p, prec_f) >= 0.85)
             return [(rank_sc, ms_f, unit_4, exp_f, prec_f, all_good)]
 
@@ -873,9 +898,24 @@ def _solve_unit_staged(lib, spec: dict, canon_views: list, scale: float, bases: 
             dedup_f.append(item)
         if len(dedup_f) >= 4:
             break
-    # Zero-shot DINOv2 perceptual disambiguation across close final sub-build unit candidates
+    # Zero-shot DINOv2 + BrickPriorNet v3 disambiguation across close final sub-build unit candidates
     # (especially effective on black-on-black blasters, pearl-gold gauntlets, and multi-layer stacks!)
-    if len(dedup_f) >= 2 and abs(dedup_f[0][0] - dedup_f[1][0]) < 0.25:
+    if len(dedup_f) >= 2 and abs(dedup_f[0][0] - dedup_f[1][0]) < 0.28:
+        bp_bonus = np.zeros(len(dedup_f), dtype=np.float64)
+        try:
+            from . import brick_prior
+            bp = brick_prior.prior()
+            if bp is not None:
+                lays_u = [[(p, c, m) for p, c, m, _d in item[2]] for item in dedup_f]
+                bp_raw = np.array([
+                    float(bp.score_layouts_batch(lay[:1], [lay[1:]], max_neighbors=4, radius=70.0)[0]) / max(1, len(lay) - 1)
+                    if len(lay) >= 2 else 0.0
+                    for lay in lays_u
+                ], dtype=np.float64)
+                bp_bonus = np.clip(0.05 * (bp_raw - float(np.mean(bp_raw))), -0.10, 0.10)
+        except Exception:
+            pass
+        d_bonus = np.zeros(len(dedup_f), dtype=np.float64)
         from . import vision_prior
         perc = vision_prior.perceptor()
         if perc is not None:
@@ -889,11 +929,11 @@ def _solve_unit_staged(lib, spec: dict, canon_views: list, scale: float, bases: 
                     ren_f.append(vision_prior.render_npr_rgb(lib, dr_u, v_u, pic_f.rgb.shape[:2], bg=bg_f)[0])
                 d_u = perc.score_renders(pic_f.rgb, fg_f, bg_f, ren_f)
                 if len(d_u) == len(dedup_f):
-                    d_adj = d_u - float(np.mean(d_u))
-                    order_u = sorted(range(len(dedup_f)), key=lambda i: -(dedup_f[i][0] + 0.45 * float(d_adj[i])))
-                    dedup_f = [dedup_f[i] for i in order_u]
+                    d_bonus = 0.45 * (d_u - float(np.mean(d_u)))
             except Exception:
                 pass
+        order_u = sorted(range(len(dedup_f)), key=lambda i: -(dedup_f[i][0] + float(d_bonus[i]) + float(bp_bonus[i])))
+        dedup_f = [dedup_f[i] for i in order_u]
     best_final = dedup_f[0]
     _rk, ms_f, unit_4, exp_f, prec_f, all_good = best_final
     alts_4 = [
@@ -952,6 +992,15 @@ def solve_unit(lib, spec: dict, view, candidate_fn, deltas, collider=None, time_
         up_deadline = _time.monotonic() + stage_budget
         staged = _solve_unit_staged(lib, spec, canon_views, panel_scale, bases, candidate_fn,
                                     collider=collider, deadline=up_deadline)
+        # Steep top-down pitch (~58 deg) fallback when standard 35 deg staged fails to explain the panel
+        # cleanly (e.g. top-down Infinity Gauntlet / weapon / shield panels like 41605 s23)!
+        if staged is None or not staged[4] or staged[2] < 0.84 or staged[3] < 0.88:
+            steep_views = [View(np.eye(3), y, 58.0, panel_scale, (0.0, 0.0), 0.0) for y in yaw_order]
+            steep_deadline = _time.monotonic() + 0.70 * stage_budget
+            staged_steep = _solve_unit_staged(lib, spec, steep_views, panel_scale, bases, candidate_fn,
+                                              collider=collider, deadline=steep_deadline)
+            if staged_steep is not None and (staged is None or staged_steep[0] > staged[0] + 0.03):
+                staged = staged_steep
         # Only try upside-down staged when upright staged failed to produce a clean full assembly
         if staged is None or not staged[4] or staged[0] < 0.10:
             R_dn = np.diag([-1.0, -1.0, 1.0])
@@ -1404,13 +1453,16 @@ def place_units(lib, scene_for, base: list, units: list[tuple[list, int]], candi
     has_fast_col = collider is not None and getattr(collider, "native", None) is not None
     if has_fast_col:
         collider.set_model(base)
-    # When placing multiple distinct units (e.g. mirror left/right sub-builds in 41620 s27), widen the beam
-    # slightly so an occluded unit cannot steal the visible unit's slot before the visible unit is placed!
-    if len(copies) >= 2:
+    # Keep distinct multi-unit steps (e.g. mirror left/right sub-builds like 41620 s27) wide so an
+    # occluded unit never evicts the visible unit; tighten only identical 2x/4x repeats (`len(units) == 1`)!
+    if len(units) >= 2:
         beam = max(beam, 6)
         per_copy = max(per_copy, 8)
+    elif len(copies) >= 2:
+        beam = max(beam, 4)
+        per_copy = max(per_copy, 6)
     states = [State()]
-    for config, facing in copies:
+    for copy_idx, (config, facing) in enumerate(copies):
         expanded = []
         for st in states:
             model = base + st.placed
@@ -1496,9 +1548,15 @@ def place_units(lib, scene_for, base: list, units: list[tuple[list, int]], candi
                 return out_k
 
             # Exact Z-buffered joint ModelScorer re-ranking on the top non-colliding unit placements!
-            # Fixes intra-unit self-occlusion AND reserves dedicated slots for hinge/clip joint mates so
-            # thousands of unrelated stud snaps can never evict an articulated hinge attachment!
-            rescore_pool = 72 if scorer is not None else per_copy
+            # Keep full pool for single-unit & distinct multi-unit steps; tighten identical 2x+ repeat copies!
+            if scorer is not None:
+                if len(copies) == 1 or len(units) >= 2:
+                    rescore_pool, joint_cap, up_cap = 72, 36, 24
+                else:
+                    rescore_pool = 28 if copy_idx == 0 else 16
+                    joint_cap, up_cap = 16, 10
+            else:
+                rescore_pool, joint_cap, up_cap = per_copy, 0, 0
             seen_w: set = set()
             cand_valid = []
             if scored_next:
@@ -1510,30 +1568,55 @@ def place_units(lib, scene_for, base: list, units: list[tuple[list, int]], candi
                 joint_src = scored_next if scored_next else scored
                 joint_only = [x for x in joint_src if x[4]]
                 if joint_only:
-                    cand_valid.extend(_take_valid(joint_only, 36, seen_w))
+                    cand_valid.extend(_take_valid(joint_only, joint_cap, seen_w))
                 upright_only = [x for x in scored if x[3] and not x[4]]
                 if upright_only:
-                    cand_valid.extend(_take_valid(upright_only, 24, seen_w))
+                    cand_valid.extend(_take_valid(upright_only, up_cap, seen_w))
 
             if scorer is not None and cand_valid:
+                # Physical multi-stud mating + BrickPriorNet v3 multi-neighbor structural prior!
+                # Eliminates isometric depth-ray climbs (e.g. 40271 s10 brain tower perching 48 LDU high
+                # on 1-2 rim studs instead of seating all 4 studs snugly in the center cavity!).
+                bp_scores = np.zeros(len(cand_valid), dtype=np.float64)
+                bp_w = float(os.environ.get("BOOKLET_SOLVER_BRICK_PRIOR_W", "35.0"))
+                if bp_w > 0.0 and len(cand_valid) >= 2 and model:
+                    try:
+                        from . import brick_prior
+                        bp = brick_prior.prior()
+                        if bp is not None:
+                            bp_raw = bp.score_layouts_batch(model, [w for _a, w, _ss, _u, _ij in cand_valid],
+                                                            max_neighbors=4, radius=70.0)
+                            cap_u = 55.0 * float(max(1, len(config)))
+                            bp_scores = np.clip(bp_w * (bp_raw - float(np.mean(bp_raw))), -cap_u, cap_u)
+                    except Exception:
+                        pass
+
                 raw_exact = []
-                for _approx, world, ss, upright, ij in cand_valid:
+                for idx_c, (_approx, world, ss, upright, ij) in enumerate(cand_valid):
                     w_drawn = _drawn_entries(world, ss)
                     cur_ex = float(scorer.score(cur_drawn + w_drawn))
                     nv_ex = (float(next_scorer.score_seated_in_next(st.placed + world))
                              if (next_scorer is not None and deltas != (0.0,)) else 0.0)
-                    raw_exact.append((cur_ex, nv_ex, world, ss, upright, ij))
+                    m_cnt = 0
+                    if has_fast_col:
+                        # Count physical connector mates onto `base` (already loaded in collider)
+                        for q_w, _cc_w, m_w in world:
+                            m_cnt += int(collider.mates(q_w, m_w)[0])
+                    raw_exact.append((cur_ex, nv_ex, m_cnt, float(bp_scores[idx_c]), world, ss, upright, ij))
                 # Only apply next-step confirmation when at least one candidate is positively confirmed
                 # in step N+1 (prevents occlusion/rotation penalties from pushing visible parts behind the model!)
                 use_nv = (next_scorer is not None and deltas != (0.0,)
-                          and any(nv > 0.0 for _, nv, _, _, _, _ in raw_exact))
+                          and any(nv > 0.0 for _, nv, _, _, _, _, _, _ in raw_exact))
                 exact_ranked = []
-                for cur_ex, nv_ex, world, ss, upright, ij in raw_exact:
+                for cur_ex, nv_ex, m_cnt, bp_s, world, ss, upright, ij in raw_exact:
                     ex_tot = cur_ex
                     if use_nv:
                         cur_d = cur_ex - float(scorer.base_score)
                         nv_eff = max(nv_ex, -0.35 * max(0.0, cur_d))
                         ex_tot += 0.6 * nv_eff
+                    if m_cnt > 0:
+                        ex_tot += 22.0 * float(min(m_cnt, 12))
+                    ex_tot += bp_s
                     if ij:
                         # Dedicated hinge/clip joint mate bonus (open hinge mating to open hinge)
                         ex_tot += 120.0

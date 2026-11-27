@@ -154,8 +154,17 @@ pub fn segmented(
     let mut changed = false;
     let total_w = ui.available_width();
     let (rect, _) = ui.allocate_exact_size(vec2(total_w, 24.0), Sense::hover());
-    let bg = if enabled { t.ink(18) } else { t.ink(10) };
+    let bg = if t.dark {
+        if enabled { t.ink(18) } else { t.ink(10) }
+    } else if enabled {
+        t.bg0
+    } else {
+        t.ink(10)
+    };
     ui.painter().rect_filled(rect, 7.0, bg);
+    if !t.dark {
+        ui.painter().rect_stroke(rect, 7.0, Stroke::new(0.5, t.border), egui::StrokeKind::Inside);
+    }
     let inner = rect.shrink(2.0);
     let seg_w = inner.width() / options.len() as f32;
     let base_id = ui.make_persistent_id(id);
@@ -165,9 +174,13 @@ pub fn segmented(
         let is_on = *selected == i;
         resp.widget_info(|| WidgetInfo::selected(egui::Role::RadioButton, enabled, is_on, label));
         if is_on {
-            let fill = if enabled { t.ink(44) } else { t.ink(22) };
+            let (fill, stroke) = if t.dark {
+                (if enabled { t.ink(44) } else { t.ink(22) }, Stroke::new(0.5, t.ink(20)))
+            } else {
+                (if enabled { t.bg2 } else { t.bg1 }, Stroke::new(0.5, t.border2))
+            };
             ui.painter().rect_filled(seg, 5.5, fill);
-            ui.painter().rect_stroke(seg, 5.5, Stroke::new(0.5, t.ink(20)), egui::StrokeKind::Inside);
+            ui.painter().rect_stroke(seg, 5.5, stroke, egui::StrokeKind::Inside);
         } else if enabled && resp.hovered() {
             ui.painter().rect_filled(seg, 5.5, t.ink(12));
         }
@@ -179,6 +192,7 @@ pub fn segmented(
             t.text2
         };
         ui.painter().text(seg.center(), Align2::CENTER_CENTER, label, FontId::proportional(11.5), fg);
+        let resp = if enabled { resp.on_hover_cursor(egui::CursorIcon::PointingHand) } else { resp };
         if enabled && resp.clicked() && !is_on {
             *selected = i;
             changed = true;
@@ -257,6 +271,7 @@ pub fn pill_switch(ui: &mut Ui, t: &Theme, label: &str, on: &mut bool, enabled: 
     let cx = if *on { rect.right() - 8.0 } else { rect.left() + 8.0 };
     let thumb = if enabled { t.knob } else { t.ink(150) };
     ui.painter().circle_filled(pos2(cx, rect.center().y), 6.5, thumb);
+    let resp = if enabled { resp.on_hover_cursor(egui::CursorIcon::PointingHand) } else { resp };
     if enabled && resp.clicked() {
         *on = !*on;
         return true;

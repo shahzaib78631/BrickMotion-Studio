@@ -109,6 +109,7 @@ class Aligner:
         self._tris = np.concatenate(tris, axis=0) if tris else np.zeros((0, 3, 3))
         self._tri_cols = np.concatenate(cols, axis=0) if cols else np.zeros(0, dtype=np.int64)
         self._verts = self._tris.reshape(-1, 3)
+        self._centroid = self._verts.mean(0) if len(self._verts) else np.zeros(3, dtype=np.float64)
         self._edge_segs: np.ndarray | None = None
 
     def _get_edge_segs(self) -> np.ndarray:
@@ -157,21 +158,53 @@ class Aligner:
 
     def planes(self, margin: int):
         if margin not in self._planes:
-            self._planes = {margin: _class_planes(self.classes, self.n, margin, self.on_ink)}
+            if len(self._planes) >= 4:
+                self._planes.clear()
+            self._planes[margin] = _class_planes(self.classes, self.n, margin, self.on_ink)
         return self._planes[margin]
 
-    def evaluate(self, view: View, use_edges: bool = True) -> tuple[float, View]:
+    def pin_centroid(self, ref_view: View, cand_view: View) -> View:
+        """Shift `cand_view.offset` so `self._centroid` projects to the same 2D pixel as under `ref_view`."""
+        if not len(self._verts):
+            return cand_view
+        p_ref = ref_view.project(self._centroid[None])[0, :2]
+        p_new = cand_view.project(self._centroid[None])[0, :2]
+        return cand_view.replace(offset=(
+            float(cand_view.offset[0] + p_ref[0] - p_new[0]),
+            float(cand_view.offset[1] + p_ref[1] - p_new[1]),
+        ))
+
+    def evaluate(self, view: View, use_edges: bool = True, search_radius: int | None = None) -> tuple[float, View]:
         f = self.factor
         scaled = view.replace(scale=view.scale * f, offset=(view.offset[0] * f, view.offset[1] * f))
         want_edges = use_edges and (self.on_ink is not None)
         template, corner, edge = self._render_fast(scaled, edges=want_edges)
         shape = self.classes.shape
         margin = int(0.3 * max(template.shape)) + 8 + max(0, max(template.shape) - min(shape))
-        margin = int(np.ceil(margin / 16) * 16)
+        margin = int(np.ceil(margin / 32) * 32)
         planes, bg, ink = self.planes(margin)
-        if template.shape[0] >= planes[0].shape[0] or template.shape[1] >= planes[0].shape[1]:
+        th, tw = template.shape
+        ph, pw = planes[0].shape
+        if th >= ph or tw >= pw:
             return -1.0, view
-        value, (x, y) = _match(template, planes, bg, self.n, edge, ink if want_edges else None)
+        if search_radius is not None:
+            rad = max(8, int(round(search_radius * f)))
+            x_exp = margin + int(round(corner[0]))
+            y_exp = margin + int(round(corner[1]))
+            x0 = max(0, x_exp - rad)
+            y0 = max(0, y_exp - rad)
+            x1 = min(pw, x_exp + tw + rad)
+            y1 = min(ph, y_exp + th + rad)
+            if (y1 - y0) > th and (x1 - x0) > tw:
+                sub_planes = [p[y0:y1, x0:x1] for p in planes]
+                sub_bg = bg[y0:y1, x0:x1]
+                sub_ink = ink[y0:y1, x0:x1] if (want_edges and ink is not None) else None
+                value, (lx, ly) = _match(template, sub_planes, sub_bg, self.n, edge, sub_ink)
+                x, y = x0 + lx, y0 + ly
+            else:
+                value, (x, y) = _match(template, planes, bg, self.n, edge, ink if want_edges else None)
+        else:
+            value, (x, y) = _match(template, planes, bg, self.n, edge, ink if want_edges else None)
         ox = scaled.offset[0] + (x - margin) - corner[0]
         oy = scaled.offset[1] + (y - margin) - corner[1]
         return value, view.replace(offset=(ox / f, oy / f))
@@ -491,20 +524,38 @@ def refine_view(lib, parts, picture: Picture, view: View, scale_tol: float = 0.0
 def register(lib, parts, picture: Picture, codes: list[int], orientation, yaw: float, pitch: float,
              scale: float, scale_range=np.linspace(0.9, 1.1, 7), angle_steps=((4.0, 0.0), (-4.0, 0.0), (0.0, 4.0), (0.0, -4.0)),
              classes: np.ndarray | None = None, on_ink: np.ndarray | None = None,
-             subpixel: bool = False, roll: float = 0.0) -> Registration:
+             subpixel: bool = False, roll: float = 0.0,
+             init_offset: tuple[float, float] | None = None) -> Registration:
     """Local registration around (orientation, yaw, pitch, scale, roll)."""
     classes = picture.classes(codes) if classes is None else classes
     aligner = Aligner(lib, parts, classes, codes, on_ink=on_ink)
-    base = View(np.asarray(orientation, float), yaw, pitch, scale, (0.0, 0.0), roll)
+    base = View(np.asarray(orientation, float), yaw, pitch, scale, init_offset if init_offset is not None else (0.0, 0.0), roll)
+    # Order scale_range starting closest to 1.0 so the very first evaluation locates the exact pixel offset,
+    # allowing all subsequent scale & angle evaluations to search a fast local +-28 px window!
+    sr_list = list(scale_range)
+    sr_ordered = sorted(sr_list, key=lambda f: abs(float(f) - 1.0))
     best = (-np.inf, base)
-    for f in scale_range:
-        value, view = aligner.evaluate(base.replace(scale=scale * f))
+    anchor_view: View | None = base if init_offset is not None else None
+    for idx_f, f in enumerate(sr_ordered):
+        cand_v = base.replace(scale=scale * float(f))
+        if anchor_view is not None:
+            cand_v = aligner.pin_centroid(anchor_view, cand_v)
+            rad = 64 if (idx_f == 0 and init_offset is not None) else 32
+        else:
+            rad = None
+        value, view = aligner.evaluate(cand_v, search_radius=rad)
+        if anchor_view is None and value > -0.99:
+            anchor_view = view
         if value > best[0]:
             best = (value, view)
     for _round in range(2):
         centre = best[1]
         for dy, dp in angle_steps:
-            value, view = aligner.evaluate(centre.replace(yaw=centre.yaw + dy / (1 + _round), pitch=centre.pitch + dp / (1 + _round)))
+            cand_v = aligner.pin_centroid(
+                centre,
+                centre.replace(yaw=centre.yaw + dy / (1 + _round), pitch=centre.pitch + dp / (1 + _round)),
+            )
+            value, view = aligner.evaluate(cand_v, search_radius=24)
             if value > best[0]:
                 best = (value, view)
     centre = best[1]
@@ -514,14 +565,15 @@ def register(lib, parts, picture: Picture, codes: list[int], orientation, yaw: f
         cand_sc = float(np.clip(centre.scale * f, sc_lo, sc_hi))
         if abs(cand_sc - centre.scale) < 1e-6:
             continue
-        value, view = aligner.evaluate(centre.replace(scale=cand_sc))
+        cand_v = aligner.pin_centroid(centre, centre.replace(scale=cand_sc))
+        value, view = aligner.evaluate(cand_v, search_radius=20)
         if value > best[0]:
             best = (value, view)
     if subpixel and on_ink is not None and len(parts):
         span = max(0.05, float(max(scale_range) - min(scale_range)) / 2.0 + 0.03) if len(scale_range) > 1 else 0.04
         refined = refine_view(lib, parts, picture, best[1], scale_tol=span)
         # Verify the refined view does not collapse colour/edge template agreement
-        val_r, _ = aligner.evaluate(refined)
+        val_r, _ = aligner.evaluate(refined, search_radius=12)
         if val_r >= best[0] - 0.08:
             best = (max(best[0], val_r), refined)
     return Registration(best[1], float(best[0]), classes.shape)
@@ -546,32 +598,32 @@ def search(lib, parts, picture: Picture, codes: list[int], orientations: list[in
     for oi in orientations:
         for yaw in COARSE_YAWS:
             for pitch in pitches:
-                value, _view = coarse.evaluate(View(ORIENTATIONS[oi], yaw, pitch, scale, (0.0, 0.0)), use_edges=False)
-                found.append((value, oi, yaw, pitch))
+                value, cview = coarse.evaluate(View(ORIENTATIONS[oi], yaw, pitch, scale, (0.0, 0.0)), use_edges=False)
+                found.append((value, oi, yaw, pitch, cview.offset))
     found.sort(key=lambda r: -r[0])
     # Re-score the top coarse candidates per orientation (plus standard LEGO studio angles 35/55 x 35)
     # with edges so shallow low-pitch views cannot crowd out the true studio camera peak!
     if on_ink is not None:
         shortlist, per_oi, seen_ep = [], {}, set()
-        for _v, oi, yaw, pitch in found:
+        for _v, oi, yaw, pitch, coff in found:
             c = per_oi.get(oi, 0)
             if c >= 4:
                 continue
             per_oi[oi] = c + 1
             seen_ep.add((oi, yaw, pitch))
-            val, _view = coarse.evaluate(View(ORIENTATIONS[oi], yaw, pitch, scale, (0.0, 0.0)), use_edges=True)
-            shortlist.append((val, oi, yaw, pitch))
+            val, cview = coarse.evaluate(View(ORIENTATIONS[oi], yaw, pitch, scale, (0.0, 0.0)), use_edges=True)
+            shortlist.append((val, oi, yaw, pitch, cview.offset))
             if len(shortlist) >= max(24, refine * 6):
                 break
         for oi in orientations:
             for sy in (35, 55):
                 if (oi, sy, 35) not in seen_ep:
                     seen_ep.add((oi, sy, 35))
-                    val, _view = coarse.evaluate(View(ORIENTATIONS[oi], sy, 35, scale, (0.0, 0.0)), use_edges=True)
-                    shortlist.append((val, oi, sy, 35))
+                    val, cview = coarse.evaluate(View(ORIENTATIONS[oi], sy, 35, scale, (0.0, 0.0)), use_edges=True)
+                    shortlist.append((val, oi, sy, 35, cview.offset))
         found = sorted(shortlist, key=lambda r: -r[0])
     out, seen = [], set()
-    for value, oi, yaw, pitch in found:
+    for value, oi, yaw, pitch, coff in found:
         if len(out) >= refine:
             break
         if separation:
@@ -586,7 +638,7 @@ def search(lib, parts, picture: Picture, codes: list[int], orientations: list[in
             seen.add(key)
         reg = register(lib, parts, picture, codes, ORIENTATIONS[oi], yaw, pitch, scale, classes=classes, on_ink=on_ink,
                        angle_steps=((5.0, 0.0), (-5.0, 0.0), (0.0, 5.0), (0.0, -5.0)), scale_range=scale_range,
-                       subpixel=False)
+                       subpixel=False, init_offset=coff)
         reg.orientation_index = oi
         out.append(reg)
     out.sort(key=lambda r: -r.score)

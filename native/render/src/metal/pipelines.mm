@@ -106,6 +106,25 @@ Pipelines makePipelines(Device& device, std::string& error) {
   p.rmidtBack = make(device, @"brickVertex", @"rmidtBackFragment", Writes::Single, MTLPixelFormatRGBA16Float, depth32, 1, brickVertices(), error);
   p.rmidtResolve = make(device, @"screenVertex", @"rmidtResolveFragment", Writes::Single, MTLPixelFormatRGBA16Float, none, 1, nil, error);
   p.pathResolve = make(device, @"screenVertex", @"pathResolveFragment", Writes::Single, MTLPixelFormatBGRA8Unorm_sRGB, none, 1, nil, error);
+  p.rtptPresent = make(device, @"screenVertex", @"rtptPresentFragment", Writes::Single, MTLPixelFormatBGRA8Unorm_sRGB, none, 1, nil, error);
+  auto makeRtptGbuf = [&](NSString* vertex, NSString* fragment, MTLVertexDescriptor* vd) -> id<MTLRenderPipelineState> {
+    MTLRenderPipelineDescriptor* d = [MTLRenderPipelineDescriptor new];
+    d.label = fragment;
+    d.vertexFunction = [device.library newFunctionWithName:vertex];
+    d.fragmentFunction = [device.library newFunctionWithName:fragment];
+    d.depthAttachmentPixelFormat = depth32;
+    d.rasterSampleCount = 1;
+    d.vertexDescriptor = vd;
+    d.colorAttachments[0].pixelFormat = MTLPixelFormatRGBA32Float;
+    d.colorAttachments[1].pixelFormat = MTLPixelFormatRGBA16Float;
+    d.colorAttachments[2].pixelFormat = MTLPixelFormatRGBA16Float;
+    d.colorAttachments[3].pixelFormat = MTLPixelFormatRGBA16Float;
+    NSError* err = nil;
+    return d.vertexFunction && d.fragmentFunction ? [device.device newRenderPipelineStateWithDescriptor:d error:&err] : nil;
+  };
+  p.rtptGbufOpaque = makeRtptGbuf(@"rtptGbufVertex", @"rtptGbufOpaqueFragment", brickVertices());
+  p.rtptGbufGlass = makeRtptGbuf(@"rtptGbufVertex", @"rtptGbufGlassFragment", brickVertices());
+  p.rtptGbufFloor = makeRtptGbuf(@"rtptGbufFloorVertex", @"rtptGbufFloorFragment", nil);
   auto makeCompute = [&](NSString* name) -> id<MTLComputePipelineState> {
     if (id<MTLFunction> fn = [device.library newFunctionWithName:name]) {
       NSError* ce = nil;
@@ -119,6 +138,14 @@ Pipelines makePipelines(Device& device, std::string& error) {
   p.hybridRtTemporal = makeCompute(@"hybridRtTemporal");
   p.neuralFeatures = makeCompute(@"neuralFeatureKernel");
   p.neuralInfer = makeCompute(@"neuralInferKernel");
+  p.rtptSharcResolve = makeCompute(@"rtptSharcResolve");
+  p.rtptDirectPass = makeCompute(@"rtptDirectPass");
+  p.rtptTraceFloor = makeCompute(@"rtptTraceFloor");
+  p.rtptTraceOpaque = makeCompute(@"rtptTraceOpaque");
+  p.rtptTraceGlass = makeCompute(@"rtptTraceGlass");
+  p.rtptSvgfTemporal = makeCompute(@"rtptSvgfTemporal");
+  p.rtptSvgfAtrous = makeCompute(@"rtptSvgfAtrous");
+  p.rtptResolveTaa = makeCompute(@"rtptResolveTaa");
   p.edges = make(device, @"edgeVertex", @"edgeFragment", Writes::Over, none, depth32, kSamples, nil, error);
   p.height = make(device, @"heightVertex", @"heightFragment", Writes::Least, MTLPixelFormatRG16Float, none, 1, brickVertices(), error);
   p.shadow = make(device, @"shadowVertex", nil, Writes::Single, none, depth32, 1, brickVertices(), error);

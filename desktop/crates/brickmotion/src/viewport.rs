@@ -295,11 +295,15 @@ impl ViewportWidget {
         let effective_auto_plan = auto_plan && !is_dragging;
         {
             let vp = doc.viewport().unwrap();
-            if fresh || self.background_dirty {
+            if fresh {
                 vp.set_background(self.background);
                 self.background_dirty = false;
                 self.last_size = None;
                 self.last_auto_plan = None;
+            } else if self.background_dirty {
+                vp.set_background(self.background);
+                self.background_dirty = false;
+                changed = true;
             }
             if self.last_auto_plan != Some(effective_auto_plan) {
                 vp.set_preferences(bm::playback::ViewportPreferences {

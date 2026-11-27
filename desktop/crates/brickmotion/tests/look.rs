@@ -129,11 +129,129 @@ fn samples_hidden_unless_path_traced() {
 }
 
 #[test]
-#[ignore = "writes a screenshot for review"]
-fn look_screenshot() {
+fn look_scene_and_shading_clicks_do_not_collapse_or_flash_panel() {
+    if !bm::metal_available() {
+        return;
+    }
     let mut h = app();
     open_look(&mut h);
-    h.run_steps(10);
-    let image = h.render().expect("render");
-    image.save(std::env::var("LOOK_SHOT").unwrap_or("/tmp/look.png".into())).unwrap();
+    let before = h.get_by_label("Look panel").rect();
+    // Clicking a Scene swatch must NOT drop Shading/Detail or shrink the panel on the click frame.
+    let swatch = reveal(&mut h, egui::accesskit::Role::Button, "Slate blue");
+    press(&mut h, swatch.center(), true);
+    press(&mut h, swatch.center(), false);
+    let on_click = h.get_by_label("Look panel").rect();
+    assert!(
+        (on_click.height() - before.height()).abs() < 2.0,
+        "Look panel height collapsed on scene click: before={before:?}, on_click={on_click:?}"
+    );
+    assert!(
+        h.query_by_role_and_label(egui::accesskit::Role::Button, "Neural").is_some(),
+        "Shading section vanished on scene click frame"
+    );
+    h.run_steps(2);
+    assert_eq!(h.state().session().render_look().scene, "slate-blue");
+
+    // Clicking a Shading mode must NOT drop Detail or shrink the panel on the click frame.
+    let before_shading = h.get_by_label("Look panel").rect();
+    let neural = reveal(&mut h, egui::accesskit::Role::Button, "Neural");
+    press(&mut h, neural.center(), true);
+    press(&mut h, neural.center(), false);
+    let on_shading_click = h.get_by_label("Look panel").rect();
+    assert!(
+        (on_shading_click.height() - before_shading.height()).abs() < 2.0,
+        "Look panel height collapsed on shading click: before={before_shading:?}, on_click={on_shading_click:?}"
+    );
+    assert!(
+        h.query_by_role_and_label(egui::accesskit::Role::Switch, "Edge lines").is_some(),
+        "Detail section vanished on shading click frame"
+    );
+    h.run_steps(2);
+    assert_eq!(h.state().session().render_look().shading, bm::export::Shading::Neural);
+
+    // Switching collection tabs lets the person pick scenes in Render and Classic, and switching
+    // to Hybrid Ray Tracing after Neural renders cleanly.
+    let render_tab = reveal(&mut h, egui::accesskit::Role::RadioButton, "Render");
+    press(&mut h, render_tab.center(), true);
+    press(&mut h, render_tab.center(), false);
+    h.run_steps(2);
+    let cobalt = reveal(&mut h, egui::accesskit::Role::Button, "Cobalt");
+    press(&mut h, cobalt.center(), true);
+    press(&mut h, cobalt.center(), false);
+    h.run_steps(2);
+    assert_eq!(h.state().session().render_look().scene, "cobalt");
+
+    let hybrid = reveal(&mut h, egui::accesskit::Role::Button, "Hybrid Ray Tracing");
+    press(&mut h, hybrid.center(), true);
+    press(&mut h, hybrid.center(), false);
+    h.run_steps(3);
+    assert_eq!(h.state().session().render_look().shading, bm::export::Shading::HybridRt);
+
+    let live_pt = reveal(&mut h, egui::accesskit::Role::Button, "Live Path Traced");
+    press(&mut h, live_pt.center(), true);
+    press(&mut h, live_pt.center(), false);
+    h.run_steps(3);
+    assert_eq!(h.state().session().render_look().shading, bm::export::Shading::RealTimePathTraced);
+    assert!(h.query_by_label("Samples").is_some());
+}
+
+#[test]
+#[ignore = "writes a screenshot for review"]
+fn look_screenshot() {
+    if let Ok(review_dir) = std::env::var("REVIEW_SHOTS") {
+        let out = std::path::PathBuf::from(review_dir);
+        for theme in ["daybreak", "dark"] {
+            let mut h = Harness::builder().with_size([1440.0, 900.0]).wgpu().build_eframe(|cc| {
+                let mut app = BrickMotionApp::new_for_test_cc(cc, Some(HELI.into()));
+                app.wait_loaded();
+                app.dialogs_off();
+                app.prefs.auto_plan = false;
+                app
+            });
+            h.run_steps(3);
+            let ctx = h.ctx.clone();
+            h.state_mut().set_theme(&ctx, theme);
+            let mut look = h.state().session().render_look();
+            look.shading = bm::export::Shading::Neural;
+            let _ = h.state_mut().doc.session().set_render_look(&look);
+            open_look(&mut h);
+            h.run_steps(8);
+            h.render().expect("render").save(out.join(format!("review-look-{theme}.png"))).unwrap();
+
+            if theme == "daybreak" {
+                let mut studio_look = h.state().session().render_look();
+                studio_look.scene = "slate-blue".into();
+                let _ = h.state_mut().doc.session().set_render_look(&studio_look);
+                h.run_steps(5);
+                h.render().expect("render").save(out.join("review-look-selected-daybreak.png")).unwrap();
+                let _ = reveal(&mut h, egui::accesskit::Role::Switch, "Lights follow the camera");
+                h.run_steps(4);
+                h.render().expect("render").save(out.join("review-look-detail-daybreak.png")).unwrap();
+                let _ = h.state_mut().doc.session().set_render_look(&look);
+                h.run_steps(4);
+            }
+
+            run(h.state_mut(), "app.settings");
+            h.run_steps(5);
+            h.render().expect("render").save(out.join(format!("review-settings-general-{theme}.png"))).unwrap();
+            for (tab, slug) in [("Building", "building"), ("Animate", "animate"), ("Files", "files")] {
+                h.get_by_role_and_label(egui::accesskit::Role::Tab, tab).click();
+                h.run_steps(5);
+                h.render().expect("render").save(out.join(format!("review-settings-{slug}-{theme}.png"))).unwrap();
+            }
+        }
+        return;
+    }
+    let out = std::env::var("LOOK_SHOT").unwrap_or_else(|_| "/tmp/look-panel.png".into());
+    let mut h = Harness::builder().with_size([1440.0, 900.0]).wgpu().build_eframe(|cc| {
+        let mut app = BrickMotionApp::new_for_test_cc(cc, Some(HELI.into()));
+        app.wait_loaded();
+        app.dialogs_off();
+        app.prefs.auto_plan = false;
+        app
+    });
+    h.run_steps(3);
+    open_look(&mut h);
+    h.run_steps(4);
+    h.render().expect("render").save(&out).unwrap();
 }

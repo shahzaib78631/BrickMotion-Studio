@@ -63,9 +63,37 @@ fn search_finds_rows_in_every_section() {
     h.run_steps(3);
     assert!(h.query_by_label("Backups kept").is_some());
     assert!(h.query_by_label("Collision checks").is_none());
+    h.get_by_role_and_label(Role::Button, "Clear Search").click();
+    h.run_steps(3);
+    assert!(h.state().settings.search.is_empty(), "Clear Search button clears query");
     h.state_mut().settings.search = "zzz-nothing".into();
     h.run_steps(3);
     assert!(h.query_by_label_contains("No settings match").is_some());
+}
+
+#[test]
+fn settings_rows_with_segmented_controls_keep_full_row_height() {
+    let mut h = empty_app();
+    open_settings(&mut h);
+    h.get_by_role_and_label(Role::Tab, "Files").click();
+    h.run_steps(3);
+    let autosave_note = h.get_by_label("An edited document is saved to a backup.").rect();
+    let backups_title = h.get_by_label("Backups kept").rect();
+    assert!(
+        backups_title.top() - autosave_note.bottom() >= 18.0,
+        "Autosave row must not collapse into Backups kept: autosave_note={autosave_note:?}, backups_title={backups_title:?}"
+    );
+    assert!(h.query_by_label("Parts library").is_some());
+    assert!(h.query_by_label("Backups folder").is_some());
+
+    h.get_by_role_and_label(Role::Tab, "Building").click();
+    h.run_steps(3);
+    let click_note = h.get_by_label("Hold ⌥ for the other.").rect();
+    let collision_title = h.get_by_role_and_label(Role::Label, "Collision checks").rect();
+    assert!(
+        collision_title.top() - click_note.bottom() >= 18.0,
+        "Click selects row must not collapse into Collision checks: click_note={click_note:?}, collision_title={collision_title:?}"
+    );
 }
 
 #[test]

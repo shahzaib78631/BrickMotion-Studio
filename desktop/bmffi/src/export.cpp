@@ -27,6 +27,7 @@ bmapp::Shading toShading(int32_t s) {
     case 3: return bmapp::Shading::HybridRT;
     case 4: return bmapp::Shading::ScreenSpaceGI;
     case 5: return bmapp::Shading::PathTraced;
+    case 6: return bmapp::Shading::RealTimePathTraced;
     default: return bmapp::Shading::Standard;
   }
 }

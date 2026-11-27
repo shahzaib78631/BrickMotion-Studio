@@ -343,6 +343,13 @@ void Renderer::Impl::drawIds() {
 void Renderer::Impl::makeTargets() {
   colorMs = depthMs = accumMs = revealMs = ambientMs = color = accum = reveal = ambient = depth = final = mask = aoRaw = aoSoft = giRaw = giSoft = ssrRaw = ssrSoft = glassFront = glassMat = glassBackNear = glassBackFar = glassDepthTex = glassResolved = nil;
   giHist[0] = giHist[1] = ssrHist[0] = ssrHist[1] = rtDepthHist[0] = rtDepthHist[1] = nil;
+  rtptDepth = rtptMat = rtptMotion = rtptDi = rtptDiffRaw = rtptSpecRaw = rtptDiffPing = rtptSpecPing = rtptDiffPong = rtptSpecPong = nil;
+  for (int i = 0; i < 2; i++) {
+    rtptPosId[i] = rtptNorm[i] = rtptDiffHist[i] = rtptSpecHist[i] = rtptMoments[i] = rtptHLen[i] = rtptTaa[i] = nil;
+  }
+  rtptW = rtptH = 0;
+  rtptHasHistory = false;
+  rtptStillFrames = 0;
   hybridHasHistory = false;
   if (width < 1 || height < 1) return;
   auto make = [&](MTLPixelFormat format, int samples, MTLTextureUsage usage, MTLStorageMode storage) {

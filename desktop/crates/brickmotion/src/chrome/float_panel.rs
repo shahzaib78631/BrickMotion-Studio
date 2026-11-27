@@ -260,7 +260,7 @@ pub fn show(
                 resp.widget_info(|| WidgetInfo::labeled(egui::Role::Group, true, format!("{} panel", kind.title())));
                 header(ui, &t, kind, &head, place.folded, &mut moved, &mut fold, &mut out.close);
                 if !place.folded {
-                    egui::ScrollArea::vertical().auto_shrink([false, true]).show(ui, |ui| {
+                    egui::ScrollArea::vertical().id_salt(("float_panel_scroll", kind)).auto_shrink([false, true]).show(ui, |ui| {
                         Frame::NONE.inner_margin(Margin { left: 0, right: 0, top: 2, bottom: 10 }).show(ui, |ui| {
                             ui.set_width(WIDTH);
                             body(ui, app);

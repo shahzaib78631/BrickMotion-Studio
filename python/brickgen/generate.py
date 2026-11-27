@@ -38,6 +38,7 @@ from .blueprint import (
     compute_blueprint_scale,
     encode_scale_vec,
     load_ldraw_color_rgba,
+    mesh_to_blueprint,
     rasterize_blueprint,
     render_blueprint_preview,
 )
@@ -137,7 +138,9 @@ class GeneratedModel:
     seconds: float
     rollbacks: int
     clip_score: float | None = None
+    image_score: float | None = None
     mirrored_pairs: int = 0
+    pruned_outliers: int = 0
     aspect_ratio: float = 1.0
     blueprint_iou: float | None = None
     blueprint_cov: float | None = None
@@ -238,11 +241,45 @@ class BrickGenerator:
         self.parts: list[str] = self.vocab["parts"]
         self.part_to_tok: dict[str, int] = {s: i + PART_OFFSET for i, s in enumerate(self.parts)}
         self.part_bboxes = np.array(self.vocab["part_bboxes"], dtype=np.float32)
+        raw_conns = self.vocab.get("part_conns")
+        if raw_conns is not None and len(raw_conns) == len(self.parts):
+            self.part_conns = np.array(raw_conns, dtype=np.int32)
+        else:
+            self.part_conns = np.full(len(self.parts), 16, dtype=np.int32)
         self.colors: list[int] = [int(c) for c in self.vocab["colors"]]
         self.color_rgba_lut = build_color_rgba_lut(self.vocab)
         self.mirror_map = _discover_mirror_map(self.parts, self.vocab.get("mirror_map"))
         self.clip = ClipEncoder(device=self.dev, load_vision=load_vision)
         self.native = BrickGenNative(use_studio=use_studio)
+
+    def _ensure_vision_loaded(self) -> None:
+        if self.clip.vision_model is None:
+            self.clip = ClipEncoder(device=self.dev, load_vision=True)
+
+    @torch.no_grad()
+    def encode_image_ref(self, image_path: str | Path) -> np.ndarray:
+        """Encode a reference image into an L2-normalized `(512,)` CLIP Vision vector in the shared text-image space."""
+        self._ensure_vision_loaded()
+        im = Image.open(image_path).convert("RGB")
+        arr = np.asarray(im, dtype=np.float32) / 255.0
+        vec = self.clip.encode_images([arr])[0]
+        return vec.astype(np.float32)
+
+    @staticmethod
+    def _blend_clip_pool(
+        text_pool: torch.Tensor,
+        image_pool: np.ndarray | None,
+        image_weight: float,
+    ) -> torch.Tensor:
+        if image_pool is None or image_weight <= 1e-4:
+            return text_pool
+        w = float(np.clip(image_weight, 0.0, 1.0))
+        iv = torch.from_numpy(np.asarray(image_pool, dtype=np.float32)).to(text_pool.device)
+        if iv.ndim == 1:
+            iv = iv.unsqueeze(0)
+        iv = iv.expand_as(text_pool)
+        blended = (1.0 - w) * text_pool.float() + w * iv.float()
+        return F.normalize(blended, dim=-1).to(text_pool.dtype)
 
     @torch.no_grad()
     def sample_blueprint(
@@ -252,22 +289,50 @@ class BrickGenerator:
         scale: str = "auto",
         symmetric: bool = True,
         n_steps: int = 32,
-        cfg_scale: float = 4.0,
+        cfg_scale: float = 3.2,
+        n_candidates: int = 4,
+        image_pool: np.ndarray | None = None,
+        image_weight: float = 0.55,
         seed: int = 0,
     ) -> tuple[np.ndarray, np.ndarray, int]:
-        """Generate a 16x16x16x5 colored 3D blueprint + scale_vec + est_parts via Stage-1 BlueprintFlow3D."""
+        """Generate a batch of 16x16x16x5 colored 3D blueprints via Stage-1 and select the best-formed silhouette."""
         if self.bp_model is None:
             raise RuntimeError("No Stage-1 blueprint checkpoint loaded (`blueprint_ckpt=None`).")
-        ids_np, lens_np = self.clip.tokenize([prompt])
+        k = max(1, int(n_candidates))
+        ids_np, lens_np = self.clip.tokenize([prompt] * k)
         L = max(int(lens_np[0]), 2)
         tt, tp = self.clip.encode_token_ids(torch.from_numpy(ids_np[:, :L]))
-        tm = torch.ones((1, L), dtype=torch.bool, device=self.dev)
-        src_t = torch.tensor([SOURCE_MAP.get(style, 0)], dtype=torch.long, device=self.dev)
-        scl_t = torch.tensor([SCALE_MAP.get(scale, 0)], dtype=torch.long, device=self.dev)
+        tp = self._blend_clip_pool(tp, image_pool, image_weight)
+        tm = torch.ones((k, L), dtype=torch.bool, device=self.dev)
+        src_t = torch.full((k,), SOURCE_MAP.get(style, 0), dtype=torch.long, device=self.dev)
+        scl_t = torch.full((k,), SCALE_MAP.get(scale, 0), dtype=torch.long, device=self.dev)
         grids, scales, est = self.bp_model.sample(
             tp, tt, tm, src_t, scl_t, n_steps=n_steps, cfg_scale=cfg_scale, symmetric=symmetric, seed=seed
         )
-        return grids[0], scales[0], est[0]
+        # Prefer well-formed silhouettes in realistic LEGO occupancy band [240, 1450] voxels (avoids empty specks & bloated cubes)
+        best_i = 0
+        best_pen = 1e9
+        for i in range(k):
+            occ = int((grids[i, 0] > 0.5).sum())
+            if occ < 240:
+                pen = (240 - occ) * 4.0
+            elif occ > 1450:
+                pen = (occ - 1450) * 1.5
+            else:
+                pen = abs(occ - 750) * 0.1
+            if pen < best_pen:
+                best_pen = pen
+                best_i = i
+        return grids[best_i], scales[best_i], est[best_i]
+
+    def extract_blueprint_from_mesh(
+        self,
+        mesh_path: str | Path,
+        span_studs: float = 12.0,
+        up_axis: str = "y",
+    ) -> tuple[np.ndarray, np.ndarray, int]:
+        """Voxelize any external 3D triangle mesh (.obj/.stl/.ply from TRELLIS/Hunyuan3D/Blender) into a 16^3x5 blueprint."""
+        return mesh_to_blueprint(mesh_path, g=BP_G, target_span_ldu=float(span_studs) * 20.0, up_axis=up_axis)
 
     def extract_blueprint_from_file(self, path: str | Path) -> tuple[np.ndarray, np.ndarray, int]:
         """Extract a canonical 16x16x16x5 colored 3D blueprint directly from any `.ldr`/`.mpd`/`.io` model."""
@@ -298,11 +363,14 @@ class BrickGenerator:
         cfg_shape: float = 1.0,
         bp_grid: np.ndarray | None = None,
         bp_scale: np.ndarray | None = None,
+        image_pool: np.ndarray | None = None,
+        image_weight: float = 0.55,
     ):
         ids_np, lens_np = self.clip.tokenize([prompt])
         L = max(int(lens_np[0]), 2)
         ids_t = torch.from_numpy(ids_np[:, :L])
         text_toks, text_pool = self.clip.encode_token_ids(ids_t)
+        text_pool = self._blend_clip_pool(text_pool, image_pool, image_weight)
         text_mask = torch.ones((1, L), dtype=torch.bool, device=self.dev)
 
         src_t = torch.tensor([SOURCE_MAP.get(style, 0)], dtype=torch.long, device=self.dev)
@@ -360,6 +428,8 @@ class BrickGenerator:
         bp_score_weight: float = 1.8,
         bp_grid: np.ndarray | None = None,
         bp_scale: np.ndarray | None = None,
+        image_pool: np.ndarray | None = None,
+        image_weight: float = 0.55,
         temp: float = 0.90,
         pose_temp: float = 0.70,
         top_k_parts: int = 18,
@@ -368,6 +438,8 @@ class BrickGenerator:
         max_rollbacks: int = 15,
         chain_penalty: float = 2.2,
         symmetric: str = "auto",
+        prune_outliers: bool = True,
+        mega_host_conn_limit: int = 120,
         seed: int = 0,
     ) -> GeneratedModel:
         t0 = time.time()
@@ -380,12 +452,26 @@ class BrickGenerator:
         # Auto-sample a Stage-1 3D blueprint when Stage-1 model is loaded and none was passed
         if bp_grid is None and self.bp_model is not None:
             bp_grid, bp_scale, _ = self.sample_blueprint(
-                prompt, style=style, scale=scale, symmetric=use_sym, seed=seed
+                prompt,
+                style=style,
+                scale=scale,
+                symmetric=use_sym,
+                image_pool=image_pool,
+                image_weight=image_weight,
+                seed=seed,
             )
 
         tracker = BlueprintProgressTracker(bp_grid, bp_scale, g=BP_G) if (bp_grid is not None and bp_scale is not None) else None
         mem, mem_mask, cfg_mode, _ = self._prepare_memory(
-            prompt, style, scale, cfg_scale, cfg_shape=cfg_shape, bp_grid=bp_grid, bp_scale=bp_scale
+            prompt,
+            style,
+            scale,
+            cfg_scale,
+            cfg_shape=cfg_shape,
+            bp_grid=bp_grid,
+            bp_scale=bp_scale,
+            image_pool=image_pool,
+            image_weight=image_weight,
         )
         bsz = 3 if cfg_mode == "dual_cfg" else (2 if cfg_mode == "text_cfg" else 1)
         self.native.reset()
@@ -406,9 +492,11 @@ class BrickGenerator:
         stems_out: list[str] = []
         colors_out: list[int] = []
         mats_out: list[np.ndarray] = []
-        # Track recent step directions & hosts for 3D collinear chain detection
+        # Track recent step directions, hosts, connector counts, and mate counts
         step_dirs: list[np.ndarray] = []
         step_hosts: list[int] = []
+        step_conns: list[int] = []
+        step_mates: list[int] = []
         rollbacks = 0
         mirrored_pairs = 0
 
@@ -453,6 +541,7 @@ class BrickGenerator:
             wbbox_ldraw: np.ndarray,
             host_i: int = -1,
             rel_vec: np.ndarray | None = None,
+            n_mates: int = 2,
         ):
             self.native.add(stem, ldraw_col, mat)
             wb_yup = ldraw_bbox_to_yup(wbbox_ldraw)
@@ -478,6 +567,10 @@ class BrickGenerator:
             colors_out.append(ldraw_col)
             mats_out.append(mat.copy())
             step_hosts.append(host_i)
+            p_idx_loc = p_tok - PART_OFFSET
+            c_cnt = int(self.part_conns[p_idx_loc]) if 0 <= p_idx_loc < len(self.part_conns) else 16
+            step_conns.append(c_cnt)
+            step_mates.append(int(n_mates))
             if rel_vec is not None and np.linalg.norm(rel_vec) > 1e-3:
                 step_dirs.append((rel_vec / np.linalg.norm(rel_vec)).astype(np.float32))
             else:
@@ -501,6 +594,8 @@ class BrickGenerator:
             colors_out.pop()
             mats_out.pop()
             step_hosts.pop()
+            step_conns.pop()
+            step_mates.pop()
             step_dirs.pop()
 
         def _try_mirror_pair(stem: str, c_tok: int, ldraw_col: int, mat: np.ndarray) -> bool:
@@ -523,8 +618,13 @@ class BrickGenerator:
             if float(dists_existing.min()) < 6.0:
                 return False
 
-            # Query native C++ solver on the nearest hosts to the mirrored target spot
-            near_order = np.argsort(dists_existing)[: min(12, len(placed_arr))].astype(np.int32)
+            # Query native C++ solver on the nearest hosts to the mirrored target spot (avoid mega-baseplate O(1024) scans)
+            near_raw = np.argsort(dists_existing)
+            normal_near = [int(i) for i in near_raw if step_conns[int(i)] <= mega_host_conn_limit]
+            near_list = normal_near[: min(12, len(normal_near))]
+            if not near_list:
+                near_list = [int(i) for i in near_raw[: min(4, len(near_raw))]]
+            near_order = np.array(near_list, dtype=np.int32)
             mc = self.native.candidates(stem_m, hosts=near_order, max_out=512, fine_angles=False, filter_collisions=True)
             if len(mc["matrices"]) == 0:
                 return False
@@ -555,7 +655,17 @@ class BrickGenerator:
                     return False
             h_m = int(mc["hosts"][best_i])
             rel_m = m_pos[best_i] - placed_arr[h_m]
-            _push_brick(p_tok_m, c_tok, stem_m, ldraw_col, m_mats[best_i], mc["bboxes"][best_i], host_i=h_m, rel_vec=rel_m)
+            _push_brick(
+                p_tok_m,
+                c_tok,
+                stem_m,
+                ldraw_col,
+                m_mats[best_i],
+                mc["bboxes"][best_i],
+                host_i=h_m,
+                rel_vec=rel_m,
+                n_mates=int(mc["mates"][best_i]),
+            )
             return True
 
         while len(stems_out) < max_parts:
@@ -602,8 +712,9 @@ class BrickGenerator:
 
                 mat = np.eye(4, dtype=np.float64)
                 mat[:3, :3] = ROT24[r24]
-                # Center root cleanly on symmetry plane X=0 when building a symmetric model
-                mat[0, 3] = 0.0 if use_sym else round(pos0[0] / 20.0) * 20.0
+                # Only snap root to symmetry plane X=0 when predicted near center (preserve off-center wheel/leg roots!)
+                rx0 = round(pos0[0] / 20.0) * 20.0
+                mat[0, 3] = 0.0 if (use_sym and abs(rx0) < 20.0) else rx0
                 mat[2, 3] = round(pos0[2] / 20.0) * 20.0
                 mat[1, 3] = 0.0
                 wb0 = world_bbox_from_local(self.part_bboxes[p_idx], mat)
@@ -662,10 +773,32 @@ class BrickGenerator:
                 ptr_logp = F.log_softmax(ptr_logits, dim=-1).cpu().numpy()
 
                 k_h = min(step_idx, top_hosts)
-                host_order = np.argsort(-ptr_logp)[:k_h].astype(np.int32)
-                cands = self.native.candidates(stem, hosts=host_order, max_out=1536, fine_angles=fine_angles, filter_collisions=True)
-                if len(cands["matrices"]) == 0 and k_h < step_idx:
-                    cands = self.native.candidates(stem, hosts=None, max_out=1536, fine_angles=fine_angles, filter_collisions=True)
+                ranked_hosts = np.argsort(-ptr_logp)
+                # Baseplate speed guard: prevent 32x32 baseplates (>120 conns) from triggering 1,000+ stud Cartesian scans every step!
+                normal_hosts = [int(h) for h in ranked_hosts if step_conns[int(h)] <= mega_host_conn_limit]
+                mega_hosts = [int(h) for h in ranked_hosts if step_conns[int(h)] > mega_host_conn_limit]
+                if not mega_hosts:
+                    host_order = ranked_hosts[:k_h].astype(np.int32)
+                    cands = self.native.candidates(stem, hosts=host_order, max_out=1536, fine_angles=fine_angles, filter_collisions=True)
+                    if len(cands["matrices"]) == 0 and k_h < step_idx:
+                        cands = self.native.candidates(stem, hosts=None, max_out=1536, fine_angles=fine_angles, filter_collisions=True)
+                else:
+                    # Query top normal hosts first; only include a mega-baseplate if we have <2 normal hosts or it's top-2 AND capped!
+                    pick_h = normal_hosts[:k_h]
+                    if len(normal_hosts) < 2 or (int(ranked_hosts[0]) in mega_hosts and step_idx < 10):
+                        pick_h = pick_h + mega_hosts[:1]
+                    max_c = 512 if (mega_hosts[0] in pick_h) else 1024
+                    cands = self.native.candidates(
+                        stem, hosts=np.array(pick_h, dtype=np.int32), max_out=max_c, fine_angles=fine_angles, filter_collisions=True
+                    )
+                    if len(cands["matrices"]) == 0 and len(normal_hosts) > len(pick_h):
+                        cands = self.native.candidates(
+                            stem, hosts=np.array(normal_hosts, dtype=np.int32), max_out=1024, fine_angles=fine_angles, filter_collisions=True
+                        )
+                    if len(cands["matrices"]) == 0 and mega_hosts[0] not in pick_h:
+                        cands = self.native.candidates(
+                            stem, hosts=np.array(mega_hosts[:1], dtype=np.int32), max_out=256, fine_angles=fine_angles, filter_collisions=True
+                        )
                 if len(cands["matrices"]) == 0:
                     continue
 
@@ -706,6 +839,9 @@ class BrickGenerator:
                 r24_c = nearest_rot24(mats_c[:, :3, :3])
                 r6_c = rotmat_to_6d(mats_c[:, :3, :3])
                 r6_c = r6_c / np.maximum(np.linalg.norm(r6_c, axis=-1, keepdims=True), 1e-6)
+                # Penalize off-axis 45° cylindrical/pin spins (e.g. tire/rim hubs) that tilt subsequent chassis bricks!
+                r_ortho_dot = np.einsum("nij,nij->n", mats_c[:, :3, :3], ROT24[r24_c])
+                s_ortho = np.where(r_ortho_dot >= 2.98, 0.0, -5.0).astype(np.float32) if not fine_angles else np.zeros(len(mats_c), dtype=np.float32)
 
                 s_par = ptr_logp[hosts_c]
                 s_rel = lp_dx[inv_idx, qdx] + lp_dy[inv_idx, qdy] + lp_dz[inv_idx, qdz]
@@ -758,6 +894,7 @@ class BrickGenerator:
                     + 0.9 * s_r24
                     + 0.8 * s_r6
                     + s_grip
+                    + s_ortho
                     + s_rep
                     + s_compact
                     + s_bp
@@ -773,6 +910,7 @@ class BrickGenerator:
                     bb_ld_c[best_m],
                     host_i=int(hosts_c[best_m]),
                     rel_vec=rel_c[best_m],
+                    n_mates=int(mates_c[best_m]),
                 )
                 if use_sym and _try_mirror_pair(stem, c_tok, ldraw_col, mats_c[best_m]):
                     mirrored_pairs += 1
@@ -786,6 +924,63 @@ class BrickGenerator:
                 _pop_brick()
 
         chk = self.native.check()
+
+        # Stray single-mate outlier pruner: cleanly trims protruding 1-mate antennae/spurs while strictly preserving
+        # overlaps==0, groups==1, stands==True, and blueprint IoU!
+        pruned_outliers = 0
+        if prune_outliers and len(stems_out) >= max(min_parts + 2, 12) and chk.overlaps == 0:
+            for _ in range(6):
+                if len(stems_out) <= max(min_parts, 8):
+                    break
+                all_bb = np.stack(seq_bbox[1:], axis=0)
+                centers = 0.5 * (all_bb[:, :3] + all_bb[:, 3:6])
+                med = np.median(centers, axis=0)
+                radii = np.linalg.norm(centers - med[None], axis=-1)
+                med_r = max(float(np.median(radii)), 20.0)
+                # Only consider single-mate protruding leaves strictly outside 1.75x median radius
+                # AND never prune bricks that have children pointing to them
+                has_child = set(h for h in step_hosts if h >= 0)
+                cand_idxs = [
+                    i
+                    for i in range(1, len(stems_out))
+                    if step_mates[i] <= 1 and i not in has_child and radii[i] > 1.75 * med_r
+                ]
+                if not cand_idxs:
+                    break
+                cand_idxs.sort(key=lambda i: -radii[i])
+                pruned_this_round = False
+                cur_span_max = float((all_bb[:, 3:6].max(0) - all_bb[:, :3].min(0)).max())
+                for drop_i in cand_idxs[:4]:
+                    sub_bb = np.delete(all_bb, drop_i, axis=0)
+                    new_span_max = float((sub_bb[:, 3:6].max(0) - sub_bb[:, :3].min(0)).max())
+                    if cur_span_max - new_span_max < 18.0:
+                        continue
+                    # Verify physically via libbmcore that removing drop_i keeps connectivity & stability intact!
+                    self.native.reset()
+                    for j, (st_j, col_j, mat_j) in enumerate(zip(stems_out, colors_out, mats_out)):
+                        if j != drop_i:
+                            self.native.add(st_j, col_j, mat_j)
+                    chk_sub = self.native.check()
+                    if (
+                        chk_sub.overlaps == 0
+                        and chk_sub.groups <= chk.groups
+                        and (chk_sub.stands or not chk.stands)
+                    ):
+                        stems_out.pop(drop_i)
+                        colors_out.pop(drop_i)
+                        mats_out.pop(drop_i)
+                        seq_bbox.pop(drop_i + 1)
+                        step_mates.pop(drop_i)
+                        # Remap parent indices for remaining bricks
+                        step_hosts.pop(drop_i)
+                        step_hosts = [h - 1 if h > drop_i else h for h in step_hosts]
+                        chk = chk_sub
+                        pruned_outliers += 1
+                        pruned_this_round = True
+                        break
+                if not pruned_this_round:
+                    break
+
         aspect_ratio = 1.0
         if len(seq_bbox) > 1:
             all_bb = np.stack(seq_bbox[1:], axis=0)
@@ -801,6 +996,7 @@ class BrickGenerator:
             seconds=round(time.time() - t0, 2),
             rollbacks=rollbacks,
             mirrored_pairs=mirrored_pairs,
+            pruned_outliers=pruned_outliers,
             aspect_ratio=round(aspect_ratio, 2),
             blueprint_iou=round(tracker.iou, 3) if tracker is not None else None,
             blueprint_cov=round(tracker.covered_fraction, 3) if tracker is not None else None,
@@ -821,16 +1017,23 @@ class BrickGenerator:
         bp_score_weight: float = 1.8,
         bp_grid: np.ndarray | None = None,
         bp_scale: np.ndarray | None = None,
+        image_ref: str | Path | None = None,
+        image_weight: float = 0.55,
         temp: float = 0.90,
         pose_temp: float = 0.70,
         symmetric: str = "auto",
+        prune_outliers: bool = True,
         seed: int = 0,
     ) -> GeneratedModel:
-        """Generate N candidates and select the best certified + blueprint-aligned + CLIP-aligned model."""
+        """Generate N candidates and select the best certified + blueprint-aligned + text/image CLIP-aligned model."""
         candidates: list[GeneratedModel] = []
         _, text_pool = self.clip.encode_texts([prompt])
         text_vec = text_pool[0]
+        img_vec: np.ndarray | None = None
+        if image_ref is not None:
+            img_vec = self.encode_image_ref(image_ref)
         allow_elongated = bool(ELONGATED_PROMPT_RE.search(prompt))
+        w_img = float(np.clip(image_weight, 0.0, 1.0)) if img_vec is not None else 0.0
 
         for k in range(n_samples):
             gm = self.generate_one(
@@ -844,9 +1047,12 @@ class BrickGenerator:
                 bp_score_weight=bp_score_weight,
                 bp_grid=bp_grid,
                 bp_scale=bp_scale,
+                image_pool=img_vec,
+                image_weight=w_img,
                 temp=temp,
                 pose_temp=pose_temp,
                 symmetric=symmetric,
+                prune_outliers=prune_outliers,
                 seed=seed + k * 997,
             )
             if rerank_clip and self.clip.vision_model is not None and BMSHOT.exists() and gm.check.pieces > 0:
@@ -854,11 +1060,17 @@ class BrickGenerator:
                 if imgs:
                     ivecs = self.clip.encode_images(imgs)
                     gm.clip_score = float((ivecs @ text_vec).mean())
+                    if img_vec is not None:
+                        gm.image_score = float((ivecs @ img_vec).mean())
             candidates.append(gm)
 
         def _rank(gm: GeneratedModel):
             c = gm.check
-            cs = gm.clip_score if gm.clip_score is not None else 0.0
+            cs_t = gm.clip_score if gm.clip_score is not None else 0.0
+            if img_vec is not None and gm.image_score is not None:
+                cs = (1.0 - w_img) * cs_t + w_img * gm.image_score
+            else:
+                cs = cs_t
             bp_bonus = 0.15 * gm.blueprint_iou if gm.blueprint_iou is not None else 0.0
             # Penalize extreme needle shapes in reranking when not prompted for a tower/bridge
             needle_pen = 0.0 if allow_elongated else max(0.0, gm.aspect_ratio - 4.0) * 0.025
@@ -875,11 +1087,16 @@ class BrickGenerator:
 
 
 def main() -> None:
-    ap = argparse.ArgumentParser(description="Generate certified LEGO models from text prompts using BrickGen (v3).")
+    ap = argparse.ArgumentParser(description="Generate certified LEGO models from text and/or reference image using BrickGen v3.")
     ap.add_argument("prompt", type=str)
     ap.add_argument("--ckpt", type=Path, default=Path("/Users/mac/Projects/BrickMotion-Data/brickgen/brickgen_v3.pt"))
     ap.add_argument("--blueprint-ckpt", type=Path, default=None, help="Stage-1 BlueprintFlow3D checkpoint (blueprint.pt)")
     ap.add_argument("--blueprint-from", type=Path, default=None, help="Extract 3D blueprint directly from an existing .ldr/.mpd/.io")
+    ap.add_argument("--blueprint-from-mesh", type=Path, default=None, help="Voxelize an external 3D mesh (.obj/.stl/.ply) into a 3D blueprint")
+    ap.add_argument("--mesh-span-studs", type=float, default=12.0, help="Target longest span in studs for --blueprint-from-mesh")
+    ap.add_argument("--mesh-up-axis", choices=["y", "z"], default="y", help="Up axis of external mesh (.obj/.stl/.ply)")
+    ap.add_argument("--image-ref", type=Path, default=None, help="Optional reference image (.png/.jpg) for CLIP Vision hybrid conditioning & reranking")
+    ap.add_argument("--image-weight", type=float, default=0.55, help="Blend weight for --image-ref vs text prompt [0..1]")
     ap.add_argument("--save-blueprint", type=Path, default=None, help="Optional PNG preview path for the 3D blueprint")
     ap.add_argument("--out", type=Path, default=Path("/Users/mac/Projects/BrickMotion-Data/brickgen/out.ldr"))
     ap.add_argument("--render", type=Path, default=None, help="Optional PNG render path via Metal bmshot")
@@ -893,16 +1110,27 @@ def main() -> None:
     ap.add_argument("--temp", type=float, default=0.90)
     ap.add_argument("--pose-temp", type=float, default=0.70)
     ap.add_argument("--symmetric", choices=["auto", "on", "off"], default="auto")
+    ap.add_argument("--no-prune-outliers", action="store_true", help="Disable post-generation stray single-mate outlier pruner")
     ap.add_argument("--samples", type=int, default=6)
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--no-clip-rerank", action="store_true")
     a = ap.parse_args()
 
-    gen = BrickGenerator(a.ckpt, blueprint_ckpt=a.blueprint_ckpt, load_vision=not a.no_clip_rerank)
+    need_vision = (not a.no_clip_rerank) or (a.image_ref is not None)
+    gen = BrickGenerator(a.ckpt, blueprint_ckpt=a.blueprint_ckpt, load_vision=need_vision)
     bp_grid, bp_scale = None, None
     if a.blueprint_from is not None:
         bp_grid, bp_scale, src_n = gen.extract_blueprint_from_file(a.blueprint_from)
         print(f"Extracted 3D blueprint from {a.blueprint_from} ({src_n} pieces, span={bp_scale[:3].round(0).tolist()} LDU)", flush=True)
+    elif a.blueprint_from_mesh is not None:
+        bp_grid, bp_scale, n_tris = gen.extract_blueprint_from_mesh(
+            a.blueprint_from_mesh, span_studs=a.mesh_span_studs, up_axis=a.mesh_up_axis
+        )
+        print(
+            f"Voxelized mesh blueprint from {a.blueprint_from_mesh} ({n_tris} tris, "
+            f"occ={int((bp_grid[0] > 0.5).sum())} vox, span={bp_scale[:3].round(0).tolist()} LDU)",
+            flush=True,
+        )
 
     res = gen.generate(
         prompt=a.prompt,
@@ -917,9 +1145,12 @@ def main() -> None:
         bp_score_weight=a.bp_weight,
         bp_grid=bp_grid,
         bp_scale=bp_scale,
+        image_ref=a.image_ref,
+        image_weight=a.image_weight,
         temp=a.temp,
         pose_temp=a.pose_temp,
         symmetric=a.symmetric,
+        prune_outliers=not a.no_prune_outliers,
         seed=a.seed,
     )
     a.out.parent.mkdir(parents=True, exist_ok=True)
@@ -929,10 +1160,12 @@ def main() -> None:
         render_blueprint_preview(res.blueprint_grid, a.save_blueprint)
         print(f"Saved blueprint preview -> {a.save_blueprint}", flush=True)
     bp_str = f" | bp_iou={res.blueprint_iou} cov={res.blueprint_cov}" if res.blueprint_iou is not None else ""
+    img_str = f" | img_sim={res.image_score:.3f}" if res.image_score is not None else ""
+    prn_str = f", pruned={res.pruned_outliers}" if res.pruned_outliers else ""
     print(
-        f"Generated {a.out}: {res.check.pieces} parts (sym_pairs={res.mirrored_pairs}, aspect={res.aspect_ratio}{bp_str}) | "
+        f"Generated {a.out}: {res.check.pieces} parts (sym_pairs={res.mirrored_pairs}{prn_str}, aspect={res.aspect_ratio}{bp_str}) | "
         f"overlaps={res.check.overlaps} | groups={res.check.groups} | stands={res.check.stands} "
-        f"(margin={res.check.margin:.1f}) | clip={res.clip_score} | rollbacks={res.rollbacks} | {res.seconds}s",
+        f"(margin={res.check.margin:.1f}) | clip={res.clip_score}{img_str} | rollbacks={res.rollbacks} | {res.seconds}s",
         flush=True,
     )
     if a.render is not None and BMSHOT.exists():

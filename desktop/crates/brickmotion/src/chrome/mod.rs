@@ -31,6 +31,7 @@ pub mod parts;
 pub mod parts_lane;
 pub mod properties;
 pub mod replace;
+pub mod rounding;
 pub mod ribbon;
 pub mod sheet;
 pub mod sound;

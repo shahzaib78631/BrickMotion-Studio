@@ -11,6 +11,7 @@ import type { RemixResult } from '../ai/remix';
 import type { VariantResult } from '../ai/variant';
 import { useAppSettings } from '../state/appSettings';
 import type { Plan } from '../plan/types';
+import type { BrickGenResult, BrickGenStatus } from '../ai/brickgenBridge';
 
 type Any<T> = T | 'any';
 
@@ -174,8 +175,217 @@ export function GeneratePanel() {
         )}
       </div>
       <button className="nx-btn nx-primary" disabled={busy || !preview || !cert?.buildable} onClick={() => void build()}>Build it as a new project</button>
+      <BrickGenSection seed={seed} />
       <PromptSection seed={seed} />
     </div>
+  );
+}
+
+/**
+ * BrickGen v3 (local neural text / reference-image / 3D-mesh -> certified LEGO),
+ * BrickLayer-Agent (autonomous hierarchical 100+ part MOC builder + visual polish),
+ * and one-click Certified Showcase MOCs backed by native C++ `libbmcore` + Metal `bmshot`.
+ */
+function BrickGenSection({ seed }: { seed: number }) {
+  const [status, setStatus] = useState<BrickGenStatus | null>(null);
+  const [mode, setMode] = useState<'neural' | 'agent' | 'showcase'>('neural');
+  const [prompt, setPrompt] = useState('');
+  const [showcaseId, setShowcaseId] = useState('speed_champions_gt');
+  const [imageDataUrl, setImageDataUrl] = useState<string | null>(null);
+  const [imageName, setImageName] = useState<string | null>(null);
+  const [meshText, setMeshText] = useState<string | null>(null);
+  const [meshName, setMeshName] = useState<string | null>(null);
+  const [useDpo, setUseDpo] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const [stage, setStage] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [result, setResult] = useState<BrickGenResult | null>(null);
+  const [abort, setAbort] = useState<AbortController | null>(null);
+
+  useEffect(() => {
+    void import('../ai/brickgenBridge').then((m) => m.brickgenStatus()).then((s) => {
+      setStatus(s);
+      if (s && !s.hasV3 && s.showcase.length > 0) setMode('showcase');
+    });
+  }, []);
+
+  if (!status?.ready) return null;
+
+  const onImagePick = (file: File | undefined) => {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === 'string') {
+        setImageDataUrl(reader.result);
+        setImageName(file.name);
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const onMeshPick = (file: File | undefined) => {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === 'string') {
+        setMeshText(reader.result);
+        setMeshName(file.name);
+      }
+    };
+    reader.readAsText(file);
+  };
+
+  const run = async () => {
+    const ac = new AbortController();
+    setAbort(ac);
+    setBusy(true);
+    setError(null);
+    setResult(null);
+    setStage(
+      mode === 'showcase'
+        ? 'Loading certified showcase MOC…'
+        : mode === 'agent'
+          ? 'BrickLayer-Agent building & visually polishing (libbmcore + Metal)…'
+          : 'Generating certified LEGO model on local MPS (BrickGen v3 + libbmcore)…',
+    );
+    try {
+      const { generateWithBrickGen } = await import('../ai/brickgenBridge');
+      const ext = meshName ? `.${meshName.split('.').pop()?.toLowerCase() ?? 'obj'}` : undefined;
+      const res = await generateWithBrickGen({
+        mode,
+        prompt: prompt.trim(),
+        showcaseId,
+        imageDataUrl: imageDataUrl ?? undefined,
+        meshText: meshText ?? undefined,
+        meshExt: ext,
+        useBlueprint: status.hasBlueprint,
+        useDpo: status.hasDpo && useDpo,
+        seed,
+        samples: 4,
+        maxParts: 80,
+        rounds: 4,
+        signal: ac.signal,
+      });
+      setResult(res);
+      setStage(null);
+    } catch (e) {
+      if (e instanceof DOMException && e.name === 'AbortError') setStage(null);
+      else {
+        setError(e instanceof Error ? e.message : String(e));
+        setStage(null);
+      }
+    } finally {
+      setBusy(false);
+      setAbort(null);
+    }
+  };
+
+  const canRun = mode === 'showcase' || !!prompt.trim();
+  return (
+    <>
+      <div className="nx-sub">BrickGen v3 (Text / Reference Image / 3D Mesh)</div>
+      <div className="bm-generate-grid">
+        <label className="nx-field">
+          Engine
+          <select value={mode} onChange={(e) => setMode(e.target.value as 'neural' | 'agent' | 'showcase')}>
+            {status.hasV3 && <option value="neural">BrickGen v3 Neural (~10s)</option>}
+            <option value="agent">BrickLayer Agent (100+ part MOC)</option>
+            {status.showcase.length > 0 && <option value="showcase">Certified Showcase MOC</option>}
+          </select>
+        </label>
+        {mode === 'showcase' && (
+          <label className="nx-field">
+            Model
+            <select value={showcaseId} onChange={(e) => setShowcaseId(e.target.value)}>
+              {status.showcase.map((s) => <option key={s.id} value={s.id}>{s.title}</option>)}
+            </select>
+          </label>
+        )}
+        {mode === 'neural' && status.hasDpo && (
+          <label className="nx-field">
+            Checkpoint
+            <select value={useDpo ? 'dpo' : 'v3'} onChange={(e) => setUseDpo(e.target.value === 'dpo')}>
+              <option value="dpo">BrickGen v3-DPO (aligned)</option>
+              <option value="v3">BrickGen v3 (base)</option>
+            </select>
+          </label>
+        )}
+      </div>
+      {mode !== 'showcase' && (
+        <>
+          <label className="nx-field">
+            Prompt
+            <input
+              type="text"
+              value={prompt}
+              placeholder="a sleek red LEGO Speed Champions sports car with yellow headlights and rear spoiler"
+              onChange={(e) => setPrompt(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter' && canRun && !busy) void run(); }}
+            />
+          </label>
+          <div className="nx-row" style={{ gap: 6, flexWrap: 'wrap' }}>
+            <label className="nx-btn" style={{ cursor: 'pointer' }}>
+              {imageName ? `Ref: ${imageName.slice(0, 18)}` : '+ Reference Image'}
+              <input type="file" accept="image/png,image/jpeg,image/webp" style={{ display: 'none' }}
+                onChange={(e) => onImagePick(e.target.files?.[0])} />
+            </label>
+            {imageDataUrl && (
+              <button className="nx-btn" onClick={() => { setImageDataUrl(null); setImageName(null); }}>Clear Img</button>
+            )}
+            {mode === 'neural' && (
+              <>
+                <label className="nx-btn" style={{ cursor: 'pointer' }}>
+                  {meshName ? `Mesh: ${meshName.slice(0, 16)}` : '+ 3D Mesh (.obj/.stl)'}
+                  <input type="file" accept=".obj,.stl,.ply" style={{ display: 'none' }}
+                    onChange={(e) => onMeshPick(e.target.files?.[0])} />
+                </label>
+                {meshText && (
+                  <button className="nx-btn" onClick={() => { setMeshText(null); setMeshName(null); }}>Clear Mesh</button>
+                )}
+              </>
+            )}
+          </div>
+          {imageDataUrl && (
+            <img src={imageDataUrl} alt="Reference" style={{ width: '100%', maxHeight: 120, objectFit: 'contain', borderRadius: 6, background: '#1114' }} />
+          )}
+        </>
+      )}
+      <div className="nx-row">
+        <button className="nx-btn nx-primary" disabled={busy || !canRun} onClick={() => void run()}>
+          {busy ? 'Generating…' : mode === 'showcase' ? 'Load Showcase MOC' : 'Generate Certified LEGO'}
+        </button>
+        {abort && <button className="nx-btn" onClick={() => abort.abort()}>Cancel</button>}
+      </div>
+      {(stage || error || result) && (
+        <div className="bm-generate-card">
+          {stage && <span className="nx-fine">{stage}</span>}
+          {error && <span className="bm-generate-bad">{error}</span>}
+          {result && (
+            <>
+              <b>{result.plan.name}</b>
+              <span className={result.stats.overlaps === 0 && result.stats.groups === 1 && result.stats.stands ? 'bm-generate-ok' : 'bm-generate-bad'}>
+                {result.stats.source ?? 'BrickGen'} · {result.stats.pieces} parts · overlaps={result.stats.overlaps} · groups={result.stats.groups} · stands={result.stats.stands ? 'YES' : 'NO'}
+                {result.stats.bpIou !== undefined ? ` · bp_iou=${result.stats.bpIou.toFixed(2)}` : ''}
+                {result.stats.imgSim !== undefined ? ` · img_sim=${result.stats.imgSim.toFixed(2)}` : ''}
+                {result.stats.clip !== undefined ? ` · clip=${result.stats.clip.toFixed(2)}` : ''}
+                {result.stats.seconds !== undefined ? ` · ${result.stats.seconds.toFixed(1)}s` : ''}
+              </span>
+              {result.renderDataUrl && (
+                <img src={result.renderDataUrl} alt={result.plan.name} style={{ width: '100%', borderRadius: 6, marginTop: 6 }} />
+              )}
+              {result.blueprintDataUrl && (
+                <img src={result.blueprintDataUrl} alt="3D Blueprint" style={{ width: '100%', borderRadius: 6, marginTop: 4 }} />
+              )}
+            </>
+          )}
+        </div>
+      )}
+      {result && (
+        <button className="nx-btn nx-primary" disabled={busy} onClick={() => void openAsProject(result.plan)}>
+          Open in Studio Viewport
+        </button>
+      )}
+    </>
   );
 }
 

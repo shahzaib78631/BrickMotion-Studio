@@ -18,6 +18,13 @@ FrameStats Renderer::Impl::draw(const Camera& camera, const FrameOptions& option
   id<MTLTexture> target = drawable ? drawable.texture : final;
   if (!target || width < 1 || height < 1 || !colorMs) return stats;
   if (drawable && (static_cast<int>(target.width) != width || static_cast<int>(target.height) != height)) return stats;  // the layer has not caught up with a resize
+  if (options.realtimePathTrace && !options.wireframe) {
+    const FrameStats rt = drawRealtimePathTraced(camera, options, drawable);
+    if (rt.submitted) return rt;
+  } else {
+    rtptHasHistory = false;
+    rtptStillFrames = 0;
+  }
   if (options.pathTraced && camera.orthoHalfHeight <= 0) {
     const FrameStats pt = drawPathTraced(camera, options, drawable);
     if (pt.submitted) return pt;
@@ -119,8 +126,28 @@ FrameStats Renderer::Impl::draw(const Camera& camera, const FrameOptions& option
     }
   }
   const bool hybridActive = useHybridRt && ptScene != nullptr;
+  if (!hybridActive) {
+    // Other modes (notably Neural) reuse giHist[0] and rtDepthHist[0], so never carry
+    // HybridRT temporal history across shading mode switches.
+    hybridHasHistory = false;
+    hybridStillFrames = 0;
+  } else {
+    const bool hybridLookChanged = hybridBg[0] != options.background[0] || hybridBg[1] != options.background[1] ||
+                                   hybridBg[2] != options.background[2] || hybridFloor != options.floor ||
+                                   hybridLightsFollow != options.lightsFollowCamera || hybridShadows != options.shadows ||
+                                   hybridAo != options.ambientOcclusion;
+    if (hybridLookChanged) {
+      hybridHasHistory = false;
+      hybridStillFrames = 0;
+      std::copy(std::begin(options.background), std::end(options.background), std::begin(hybridBg));
+      hybridFloor = options.floor;
+      hybridLightsFollow = options.lightsFollowCamera;
+      hybridShadows = options.shadows;
+      hybridAo = options.ambientOcclusion;
+    }
+  }
   const bool studioGlassActive = useStudioGlass && ptScene != nullptr;
-  if ((refract || hybridActive || studioGlassActive || options.screenSpaceGi) && !glassResolved) makeGlassTargets();
+  if ((refract || hybridActive || studioGlassActive || options.studioLook || options.screenSpaceGi) && !glassResolved) makeGlassTargets();
   // DEBUG HOOK: BM_HYBRID_SKIP=<csv of glass,glassmask,glasscompute,gi,temporal,ao> ablates hybrid passes for profiling.
   std::vector<std::string> hybridSkipList;
   if (const char* skipped = getenv("BM_HYBRID_SKIP")) {
@@ -687,6 +714,15 @@ FrameStats Renderer::Impl::draw(const Camera& camera, const FrameOptions& option
         [enc drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:3];
         [enc endEncoding];
       }
+    } else if (useNeural && aoSoft) {
+      // Neural reads aoSoft even when shadows and AO are both off; clear so stale AO never bleeds in.
+      MTLRenderPassDescriptor* d = [MTLRenderPassDescriptor new];
+      d.colorAttachments[0].texture = aoSoft;
+      d.colorAttachments[0].loadAction = MTLLoadActionClear;
+      d.colorAttachments[0].clearColor = MTLClearColorMake(1, 1, 0, 1);
+      d.colorAttachments[0].storeAction = MTLStoreActionStore;
+      id<MTLRenderCommandEncoder> enc = [commands renderCommandEncoderWithDescriptor:d];
+      [enc endEncoding];
     }
     // Studio ABS Look: glass-only instanced Metal RT (zero GI noise, zero SVGF ghosting).
     if (options.studioLook) {

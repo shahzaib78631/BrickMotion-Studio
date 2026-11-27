@@ -34,7 +34,7 @@ from .place import (
 )
 from .scorer import CHANGE_WEIGHT, EDGE_PREC_WEIGHT, ModelScorer, PAPER_PENALTY, UNEXPLAINED_PENALTY
 
-MATE_TIE_WEIGHT = 6.0        # physical tie-breaker per mated connector (in pixel-score units)
+MATE_TIE_WEIGHT = 10.0       # physical tie-breaker per mated connector (in pixel-score units)
 HIDDEN_FRAC = 0.22           # smooth occlusion threshold: zero penalty at >=22% visible, ramps smoothly below
 HIDDEN_PER_PX = 0.90         # penalty per pixel below `HIDDEN_FRAC * total_px` (prevents 12%-vis backside rim cheats)
 HIDDEN_CAP = 300.0           # cap so a truly hidden inner brick always beats wrong colour / bare paper (-800..-3500)
@@ -45,6 +45,41 @@ FLOAT_BASE = 700.0           # fixed activation cost for floating a part (delta 
 CONTINUOUS_KINDS = ("clip", "hinge", "technic")
 
 
+def _rerank_with_brick_prior(base: list, states: list[State], top_k: int = 8) -> list[State]:
+    """Calibrated BrickNet v3 multi-neighbor structural tie-breaker on top completed layouts (<1ms MPS).
+
+    Clamped to +-45 px/part so clear visual evidence always wins while occluded, black-on-black,
+    curved-slope, and 1-stud-overhang ties break cleanly in favour of real LEGO connections.
+    """
+    import os
+    bp_w = float(os.environ.get("BOOKLET_SOLVER_BRICK_PRIOR_W", "35.0"))
+    if bp_w <= 0.0 or len(states) < 2 or len(base) < 2:
+        return states
+    from . import brick_prior
+    bp = brick_prior.prior()
+    if bp is None:
+        return states
+    k = min(top_k, len(states))
+    top_sts = states[:k]
+    n_p = max(1, len(top_sts[0].placed))
+    if not all(len(st.placed) == n_p for st in top_sts):
+        return states
+    # Only engage when top-2 layouts are close enough that a clamped structural prior could matter
+    totals = np.array([float(st.total) for st in top_sts], dtype=np.float64)
+    cap_px = 45.0 * float(n_p)
+    if float(totals[0] - totals[1]) > 2.2 * cap_px:
+        return states
+    bp_raw = bp.score_layouts_batch(base, [st.placed for st in top_sts], max_neighbors=4, radius=70.0)
+    bp_adj = np.clip(bp_w * (bp_raw - float(np.mean(bp_raw))), -cap_px, cap_px)
+    order = sorted(range(k), key=lambda i: -(float(totals[i]) + float(bp_adj[i])))
+    out = []
+    for i in order:
+        st_i = top_sts[i]
+        st_i.total = float(totals[i] + bp_adj[i])
+        out.append(st_i)
+    return out + states[k:]
+
+
 def _float_cost(delta: float, float_base: float | None = None) -> float:
     if delta <= 0.0:
         return 0.0
@@ -52,8 +87,9 @@ def _float_cost(delta: float, float_base: float | None = None) -> float:
     return fb + FLOAT_PENALTY * float(delta)
 
 
-def _non_ortho_penalty(cand: dict | None, matrix: np.ndarray) -> float:
-    pen = FLUSH_PENALTY if (cand is not None and cand.get("kind") == "flush") else 0.0
+def _non_ortho_penalty(cand: dict | None, matrix: np.ndarray, flush_penalty: float | None = None) -> float:
+    fp = FLUSH_PENALTY if flush_penalty is None else float(flush_penalty)
+    pen = fp if (cand is not None and cand.get("kind") == "flush") else 0.0
     if cand is not None and cand.get("kind") in ("hinge", "clip"):
         return pen
     r = np.abs(np.asarray(matrix, float)[:3, :3])
@@ -179,7 +215,8 @@ def _scene_score_planes(scorer: ModelScorer, cur_depth: np.ndarray, cur_col_map:
 
 def score_candidates_calibrated(lib, scorer: ModelScorer, drawn_placed: list, part: str, colour: int,
                                 cands: list[dict], deltas=DELTAS, pushes=(),
-                                float_base: float | None = None) -> list[Scored]:
+                                float_base: float | None = None,
+                                flush_penalty: float | None = None) -> list[Scored]:
     """Score candidates using ModelScorer's calibrated Lab planes, dark+light edges, and change mask.
     Batches all placements per unique part rotation through C++ `bm_score_sprites` (~500x faster)."""
     from . import native_bridge
@@ -308,7 +345,7 @@ def score_candidates_calibrated(lib, scorer: ModelScorer, drawn_placed: list, pa
 
         for idx, cand, m in items:
             b = best_by[idx]
-            value = b[0] + float(cand.get("prior", 0.0)) * abs(b[0]) - _non_ortho_penalty(cand, m)
+            value = b[0] + float(cand.get("prior", 0.0)) * abs(b[0]) - _non_ortho_penalty(cand, m, flush_penalty=flush_penalty)
             out[idx] = Scored(value, b[1], b[2], cand, b[3], b[4], seated_by.get(idx, 0.0), b[5], move=b[6])
 
     return out
@@ -351,7 +388,8 @@ def _model_key(model: list) -> tuple:
 
 
 def _milp_tiling_seeds(lib, scorer: ModelScorer, base: list, parts: list[tuple[str, int]],
-                       cached_cands, collider=None, max_sols: int = 4, time_limit: float = 0.8) -> list[State]:
+                       cached_cands, collider=None, max_sols: int = 4, time_limit: float = 0.8,
+                       allowed_types: set[tuple[str, int]] | None = None) -> list[State]:
     """Global exact-cover MILP proposal for multi-part steps (`2 <= len(parts) <= 12`).
 
     When several parts (especially `k >= 2` identical parts like a ring of SNOT bricks) attach
@@ -366,10 +404,14 @@ def _milp_tiling_seeds(lib, scorer: ModelScorer, base: list, parts: list[tuple[s
     if not (2 <= len(parts) <= 12) or not base:
         return []
 
-    # Group part indices by (part, colour)
+    # Group part indices by (part, colour), optionally restricting to seated types on mixed exploded steps
     by_type: dict[tuple[str, int], list[int]] = {}
     for idx, pc in enumerate(parts):
+        if allowed_types is not None and pc not in allowed_types:
+            continue
         by_type.setdefault(pc, []).append(idx)
+    if sum(len(v) for v in by_type.values()) < 2:
+        return []
 
     # Precompute valid base candidates per unique type
     cur_depth, cur_label, cur_col_map, cur_edge_depth = _build_current_buffers(lib, scorer, [])
@@ -593,7 +635,8 @@ def solve_step_exact(lib, scene_for, scorer: ModelScorer, base: list, parts: lis
                      use_milp: bool = True, milp_time_limit: float = 0.8, milp_max_sols: int = 4,
                      polish_top_k: int = 40, polish_rounds: int = 4,
                      fill_depth: int | None = None, fill_budget: int | None = None,
-                     time_budget: float = 18.0, float_base: float | None = None) -> list[State]:
+                     time_budget: float = 18.0, float_base: float | None = None,
+                     flush_penalty: float | None = None) -> list[State]:
     """Exact ModelScorer-guided beam search + global MILP tiling seeds + multi-start joint polish.
     When `next_scorer` is supplied on an exploded step (`deltas != (0.0,)`), candidate pruning also
     keeps the highest-scoring SEATED poses on `next_scorer` so arrows never discard the true seat."""
@@ -615,7 +658,32 @@ def solve_step_exact(lib, scene_for, scorer: ModelScorer, base: list, parts: lis
     if collider is not None:
         collider.set_model(base)
 
-    # 1. Order part types by strongest root-state visual evidence (clear parts first!).
+    # Precompute base XZ center for bilateral mirror tie-breaking among completely occluded (`changed == 0`) poses
+    _base_xz_ctr = None
+    if base:
+        _bpts = np.array([np.asarray(m, float)[:3, 3] for _p, _c, m in base], dtype=np.float64)
+        _base_xz_ctr = (0.5 * float(_bpts[:, 0].min() + _bpts[:, 0].max()),
+                        0.5 * float(_bpts[:, 2].min() + _bpts[:, 2].max()))
+
+    def _hidden_mirror_bonus(part_n: str, col_n: int, m_cand: np.ndarray, placed_now: list) -> float:
+        """Small tie-breaker (+28 px) when a completely occluded part mirrors an already-placed
+        identical `(part, colour)` brick across the base's X or Z center plane!"""
+        if _base_xz_ctr is None or not placed_now:
+            return 0.0
+        cx, cz = _base_xz_ctr
+        p_c = np.asarray(m_cand, float)[:3, 3]
+        for pp, pc, pm in placed_now:
+            if pp != part_n or pc != col_n:
+                continue
+            p_o = np.asarray(pm, float)[:3, 3]
+            if abs(p_c[1] - p_o[1]) > 1.5:
+                continue
+            # Mirror across Z = cz (front/back symmetry) or X = cx (left/right symmetry)
+            mir_z = abs(p_c[0] - p_o[0]) < 1.5 and abs((p_c[2] + p_o[2]) * 0.5 - cz) < 2.5 and abs(p_c[2] - p_o[2]) > 5.0
+            mir_x = abs(p_c[2] - p_o[2]) < 1.5 and abs((p_c[0] + p_o[0]) * 0.5 - cx) < 2.5 and abs(p_c[0] - p_o[0]) > 5.0
+            if mir_z or mir_x:
+                return 28.0
+        return 0.0
     # On exploded steps (`deltas != (0.0,)`), place SEATED parts (`delta == 0`) BEFORE FLOATING parts
     # (`delta > 0`) so floating parts (e.g. flame above candle, clip above blaster) have their seated host!
     unique_types = list(dict.fromkeys(parts))
@@ -626,7 +694,7 @@ def solve_step_exact(lib, scene_for, scorer: ModelScorer, base: list, parts: lis
             cands = distinct(lib, p, cached_cands(p, base))
             if collider is not None and cands:
                 cands = [q for q in cands if not collider.hits(p, q["matrix"])]
-            scored = score_candidates_calibrated(lib, scorer, [], p, c, cands, deltas=deltas, pushes=pushes, float_base=float_base) if cands else []
+            scored = score_candidates_calibrated(lib, scorer, [], p, c, cands, deltas=deltas, pushes=pushes, float_base=float_base, flush_penalty=flush_penalty) if cands else []
             scored.sort(key=lambda s: -s.score)
             best_root[(p, c)] = scored[0].score if scored else -1e9
             best_is_seated[(p, c)] = bool(scored and scored[0].delta == 0.0 and scored[0].move is None)
@@ -638,11 +706,16 @@ def solve_step_exact(lib, scene_for, scorer: ModelScorer, base: list, parts: lis
         order = list(range(len(parts)))
 
     # 2. Seed states (empty + filled hole stacks + global MILP exact-cover tiling seeds)
+    # On mixed exploded steps (e.g. 41620 s8: 4 seated 2420 corner plates + 1 floating printed tile),
+    # ALSO run MILP on the seated subset so a 4-way shifted overhang ring can never beat the flush tiling!
     states = [State(total=scorer.base_score)]
     milp_complete: list[State] = []
-    if use_milp and deltas == (0.0,) and 2 <= len(parts) <= 12:
+    milp_types = None
+    if deltas != (0.0,) and len(unique_types) > 1:
+        milp_types = {pc for pc in unique_types if best_is_seated.get(pc, False)}
+    if use_milp and 2 <= len(parts) <= 12 and (deltas == (0.0,) or (milp_types and sum(1 for pc in parts if pc in milp_types) >= 2)):
         for mst in _milp_tiling_seeds(lib, scorer, base, parts, cached_cands, collider=collider, max_sols=milp_max_sols,
-                                      time_limit=milp_time_limit):
+                                      time_limit=milp_time_limit, allowed_types=milp_types):
             if len(mst.done) == len(parts):
                 milp_complete.append(mst)
             else:
@@ -692,9 +765,14 @@ def solve_step_exact(lib, scene_for, scorer: ModelScorer, base: list, parts: lis
             cands = distinct(lib, part, cached_cands(part, model))
             if not cands:
                 continue
-            scored = score_candidates_calibrated(lib, scorer, drawn, part, colour, cands, deltas=deltas, pushes=pushes, float_base=float_base)
+            scored = score_candidates_calibrated(lib, scorer, drawn, part, colour, cands, deltas=deltas, pushes=pushes, float_base=float_base, flush_penalty=flush_penalty)
             fresh = len(base)
-            scored.sort(key=lambda s: (-s.score, 0 if (s.candidate.get("host") or -1) >= fresh else 1))
+            # Break exact ties among completely occluded (`changed == 0`) poses using bilateral twin mirroring
+            # so a hidden backside twin isn't arbitrarily dropped by `hidden_added >= 2`!
+            scored.sort(key=lambda s: (
+                -(s.score + (_hidden_mirror_bonus(part, colour, s.candidate["matrix"], st.placed) if s.changed < 15 else 0.0)),
+                0 if (s.candidate.get("host") or -1) >= fresh else 1,
+            ))
 
             kept: list[Scored] = []
             kept_keys: set = set()
@@ -776,6 +854,17 @@ def solve_step_exact(lib, scene_for, scorer: ModelScorer, base: list, parts: lis
                     )
                     if _accept(sc0):
                         seat_added += 1
+                # On exploded tiny-base steps (e.g. Step 1 side-by-side plates drawn pushed apart by arrows),
+                # reserve slots for top `flush` candidates so vertically-lifted 1-stud corner stacks can never
+                # crowd out side-by-side flush pairs before recentering!
+                if len(base) <= 2:
+                    flush_added = 0
+                    for sc in scored:
+                        if flush_added >= 4:
+                            break
+                        if isinstance(sc.candidate, dict) and sc.candidate.get("kind") == "flush":
+                            if _accept(sc):
+                                flush_added += 1
 
             for j, sc in enumerate(kept):
                 nxt = kept[j + 1].score if j + 1 < len(kept) else (kept[j - 1].score if j else sc.score - 100.0)
@@ -804,11 +893,13 @@ def solve_step_exact(lib, scene_for, scorer: ModelScorer, base: list, parts: lis
                     nv_ex = float(next_scorer.score_seated_in_next(new_placed))
                     cur_delta = cur_ex - float(scorer.base_score)
                     exact_val += 1.0 * max(nv_ex, -0.35 * max(0.0, cur_delta))
-                exact_val -= sum(_non_ortho_penalty(s.candidate if s else None, m_i) for (_p, _c, m_i), s in zip(new_placed, new_scores))
-                if collider is not None and getattr(collider, "native", None) is not None:
+                exact_val -= sum(_non_ortho_penalty(s.candidate if s else None, m_i, flush_penalty=flush_penalty) for (_p, _c, m_i), s in zip(new_placed, new_scores))
+                if collider is not None and getattr(collider, "native", None) is not None and not (len(base) <= 1 and deltas != (0.0,)):
                     exact_val += _physical_bonus(collider, base, new_placed)
                 if (sc.candidate.get("host") or -1) >= fresh and sc.changed < 40:
                     exact_val += SAME_STEP_TIE
+                if sc.changed < 15:
+                    exact_val += _hidden_mirror_bonus(part, colour, entry[2], st.placed)
                 expanded.append(State(new_placed, new_scores, exact_val, st.done | {i}, st.groups))
                 advanced = True
 
@@ -824,6 +915,27 @@ def solve_step_exact(lib, scene_for, scorer: ModelScorer, base: list, parts: lis
             unique.append(st)
             if len(unique) >= eff_beam:
                 break
+        # On exploded Step 1 (len(base) <= 2), guarantee top `flush` states survive beam truncation alongside
+        # `stud` states so recentering & Step-2 trajectory beam always see both hypotheses!
+        if deltas != (0.0,) and len(base) <= 2:
+            def _has_flush(st_f: State) -> bool:
+                return any(s is not None and isinstance(s.candidate, dict) and s.candidate.get("kind") == "flush" for s in st_f.scores)
+            n_fl_in = sum(1 for st_u in unique if _has_flush(st_u))
+            if n_fl_in < 3:
+                extra_fl = []
+                for st_e in expanded:
+                    if not _has_flush(st_e):
+                        continue
+                    key = _state_geom_key(lib, st_e.placed)
+                    if key in seen:
+                        continue
+                    seen.add(key)
+                    extra_fl.append(st_e)
+                    if n_fl_in + len(extra_fl) >= 3:
+                        break
+                if extra_fl:
+                    keep_non = max(1, eff_beam - len(extra_fl))
+                    unique = unique[:keep_non] + extra_fl
         states = unique
 
     # Merge MILP complete seeds with beam complete states (deduplicated, sorted by exact ModelScorer)
@@ -839,14 +951,23 @@ def solve_step_exact(lib, scene_for, scorer: ModelScorer, base: list, parts: lis
 
     # 4. Multi-start joint polish directly on ModelScorer (in-place steps, AND seated subset on mixed exploded steps!)
     complete = [st for st in states if len(st.placed) == len(parts)]
-    if complete and deltas == (0.0,) and polish_starts > 0 and _time.monotonic() < _t_deadline + 6.0:
+    if complete and deltas == (0.0,) and polish_starts > 0 and _time.monotonic() < _t_deadline + (4.0 if polish_starts >= 2 else 1.5):
         polished = []
         seen_keys = set()
         n_pol = min(polish_starts, len(complete))
-        for st in complete[:n_pol]:
-            rem = max(2.0, (_t_deadline + 12.0) - _time.monotonic())
+        top_total0 = float(complete[0].total)
+        per_cap = 10.0 if polish_starts >= 2 else 2.2
+        extra_slack = 8.0 if polish_starts >= 2 else 1.5
+        for idx_p, st in enumerate(complete[:n_pol]):
+            if idx_p > 0 and (_time.monotonic() > _t_deadline + (2.0 if polish_starts >= 2 else 0.0) or float(st.total) < top_total0 - 450.0):
+                k = _state_geom_key(lib, st.placed)
+                if k not in seen_keys:
+                    seen_keys.add(k)
+                    polished.append(st)
+                continue
+            rem = max(1.5, (_t_deadline + extra_slack) - _time.monotonic())
             pst = exact_polish(lib, scorer, base, st, cached_cands, collider=collider,
-                               top_k=polish_top_k, rounds=polish_rounds, time_budget=min(12.0, rem))
+                               top_k=polish_top_k, rounds=polish_rounds, time_budget=min(per_cap, rem))
             k = _state_geom_key(lib, pst.placed)
             if k not in seen_keys:
                 seen_keys.add(k)
@@ -858,7 +979,7 @@ def solve_step_exact(lib, scene_for, scorer: ModelScorer, base: list, parts: lis
                 seen_keys.add(k)
                 polished.append(st)
         polished.sort(key=lambda s: -s.total)
-        return polished
+        return _rerank_with_brick_prior(base, polished)
 
     # 4b. On mixed exploded steps (e.g. 41620 s8: 1 floating printed tile + 4 seated black corner plates!),
     # polish ONLY the seated parts (`delta == 0.0`) while holding floating parts fixed at their drawn poses!
@@ -885,7 +1006,8 @@ def solve_step_exact(lib, scene_for, scorer: ModelScorer, base: list, parts: lis
                 if collider is not None:
                     collider.set_model(sub_base_col)
                 pst_s = exact_polish(lib, sub_sc, sub_base_col, seat_st, cached_cands, collider=collider,
-                                     top_k=min(polish_top_k, 24), rounds=2, time_budget=4.0)
+                                     top_k=min(polish_top_k, 24), rounds=2,
+                                     time_budget=(8.0 if polish_starts >= 2 else 3.0))
                 if collider is not None:
                     collider.set_model(base)
                 # Reassemble full state and re-score with exact full exploded objective!
@@ -902,7 +1024,7 @@ def solve_step_exact(lib, scene_for, scorer: ModelScorer, base: list, parts: lis
                 if next_scorer is not None:
                     nv_c = float(next_scorer.score_seated_in_next(comb_p))
                     c_tot += 1.0 * max(nv_c, -0.35 * max(0.0, c_ex - float(scorer.base_score)))
-                c_tot -= sum(_non_ortho_penalty(s.candidate if s else None, m_i) for (_p, _c, m_i), s in zip(comb_p, comb_s))
+                c_tot -= sum(_non_ortho_penalty(s.candidate if s else None, m_i, flush_penalty=flush_penalty) for (_p, _c, m_i), s in zip(comb_p, comb_s))
                 if collider is not None and getattr(collider, "native", None) is not None:
                     c_tot += _physical_bonus(collider, base, comb_p)
                 chosen = State(comb_p, comb_s, c_tot, st.done, st.groups) if c_tot > st.total + 1e-4 else st
@@ -918,10 +1040,10 @@ def solve_step_exact(lib, scene_for, scorer: ModelScorer, base: list, parts: lis
                 seen_ek.add(k)
                 polished_exp.append(st)
         polished_exp.sort(key=lambda s: -s.total)
-        return polished_exp
+        return _rerank_with_brick_prior(base, polished_exp)
 
     states.sort(key=lambda s: -s.total)
-    return states
+    return _rerank_with_brick_prior(base, states)
 
 
 def _rotate_about_axis(axis: np.ndarray, deg: float) -> np.ndarray:
@@ -1157,6 +1279,8 @@ def exact_polish(lib, scorer: ModelScorer, base: list, state: State, candidate_f
                 break
             gset = set(group)
             for entries, scs in shortlist_group(group, gset):
+                if _time.monotonic() > _t_deadline:
+                    break
                 if all(_same_spot(e[2], placed[k][2]) and np.allclose(e[2][:3, :3], placed[k][2][:3, :3], atol=1e-3)
                        for e, k in zip(entries, group)):
                     continue
@@ -1223,7 +1347,8 @@ def exact_polish(lib, scorer: ModelScorer, base: list, state: State, candidate_f
                     if improved:
                         break
 
-                elif len(blocking) == 2 and len(groups[blocking[0]]) == 1 and len(groups[blocking[1]]) == 1:
+                elif (len(blocking) == 2 and len(groups[blocking[0]]) == 1 and len(groups[blocking[1]]) == 1
+                        and _time.monotonic() < _t_deadline - 0.2):
                     # Try moving BOTH blocking single parts out of the way (fixes 2-for-2 shifted rings!)
                     hk1, hk2 = groups[blocking[0]][0], groups[blocking[1]][0]
                     p1, c1, _m1 = placed[hk1]
@@ -1231,13 +1356,16 @@ def exact_polish(lib, scorer: ModelScorer, base: list, state: State, candidate_f
                     skip_all = gset | {hk1, hk2}
                     rest_1 = rest_of(skip_all) + list(entries)
                     model_1 = base + rest_1
-                    for sc1 in shortlist_part(p1, c1, model_1, rest_1)[:4]:
+                    b2_k = 4 if top_k >= 24 else 3
+                    for sc1 in shortlist_part(p1, c1, model_1, rest_1)[:b2_k]:
+                        if _time.monotonic() > _t_deadline:
+                            break
                         m1 = np.asarray(sc1.candidate["matrix"], float)
                         if collider is not None and collider.hits_extra(p1, m1, rest_1):
                             continue
                         rest_2 = rest_1 + [(p1, c1, m1)]
                         model_2 = base + rest_2
-                        for sc2 in shortlist_part(p2, c2, model_2, rest_2)[:4]:
+                        for sc2 in shortlist_part(p2, c2, model_2, rest_2)[:b2_k]:
                             m2 = np.asarray(sc2.candidate["matrix"], float)
                             if collider is not None and collider.hits_extra(p2, m2, rest_2):
                                 continue
@@ -1267,6 +1395,8 @@ def exact_polish(lib, scorer: ModelScorer, base: list, state: State, candidate_f
         # B. Direct pairwise swaps between distinct single-part groups (e.g. black & gold 1x1 plates, tan tile & slope)
         singles = [g[0] for g in groups if len(g) == 1]
         for a_i in range(len(singles)):
+            if _time.monotonic() > _t_deadline:
+                break
             for b_i in range(a_i + 1, len(singles)):
                 i, j = singles[a_i], singles[b_i]
                 pi, ci, mi = placed[i]

@@ -4,12 +4,13 @@ import { eyesightCaptureBridge } from './scripts/eyesight-capture-bridge';
 import { partsUpdateBridge } from './scripts/parts-update-bridge';
 import react from '@vitejs/plugin-react';
 import { assemblyCorrectorBridge } from './scripts/assembly-corrector-bridge';
+import { brickgenBridge } from './scripts/brickgen-bridge';
 import { bricksafeBridge } from './scripts/bricksafe-bridge';
 import { claudeBridge } from './scripts/claude-bridge';
 import { neuralSaveBridge } from './scripts/neural/save-bridge';
 
 export default defineConfig({
-  plugins: [react(), partsUpdateBridge(), eyesightCaptureBridge(), assemblyCorrectorBridge(), bricksafeBridge(), claudeBridge(), neuralSaveBridge()],
+  plugins: [react(), partsUpdateBridge(), eyesightCaptureBridge(), assemblyCorrectorBridge(), brickgenBridge(), bricksafeBridge(), claudeBridge(), neuralSaveBridge()],
   test: {
     environment: 'node',
     include: ['tests/**/*.test.{ts,tsx}'],

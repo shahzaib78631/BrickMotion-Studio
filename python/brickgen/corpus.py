@@ -39,6 +39,7 @@ PART_FUNCS_PATH = REPO_ROOT / "public/data/part-functions.json"
 BRICKNET_DIR = DATA_ROOT / "bricknet"
 OMR_DIR = DATA_ROOT / "omr"
 MOC_DIR = DATA_ROOT / "MOC"
+BRICKLAYER_MOC_DIR = DATA_ROOT / "brickgen" / "bricklayer_showcase"
 BRICKHEADZ_DIR = DATA_ROOT / "ldraw_brickheadz"
 DEFAULT_OUT = DATA_ROOT / "brickgen" / "corpus"
 
@@ -776,6 +777,20 @@ def build_corpus(
                     f"A detailed custom LEGO {title} MOC",
                 ]
                 moc_files.append((f, title, base_caps))
+    # Also ingest certified BrickLayer-Studio synthetic human-grade MOCs (distillation flywheel!)
+    if BRICKLAYER_MOC_DIR.exists():
+        for f in sorted(BRICKLAYER_MOC_DIR.glob("*.ldr")):
+            # Only ingest certified BrickLayer-Studio MOCs (skip neural test outputs)
+            head = f.read_text(encoding="utf-8", errors="ignore").splitlines()[:12]
+            if not any("Author: BrickLayer-Studio" in ln for ln in head):
+                continue
+            title = clean_filename_title(f.stem)
+            prompt_caps = [ln.split("Prompt:", 1)[1].strip() for ln in head if "0 // Prompt:" in ln]
+            base_caps = prompt_caps + [
+                f"This is a custom LEGO MOC build of {title}",
+                f"A detailed human-designed LEGO {title} model",
+            ]
+            moc_files.append((f, title, base_caps))
     if limit_moc is not None:
         moc_files = moc_files[:limit_moc]
 

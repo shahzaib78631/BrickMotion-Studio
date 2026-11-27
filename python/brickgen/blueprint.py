@@ -597,6 +597,286 @@ def keep_largest_component_3d(occ: np.ndarray) -> np.ndarray:
     return out
 
 
+def _load_obj_mesh(path: Path) -> tuple[np.ndarray, np.ndarray, np.ndarray | None]:
+    """Pure-NumPy Wavefront .obj (+ optional .mtl Kd colors and per-vertex RGB) loader."""
+    verts: list[list[float]] = []
+    vcols: list[list[float] | None] = []
+    faces: list[tuple[int, int, int]] = []
+    face_cols: list[list[float] | None] = []
+    mtl_colors: dict[str, list[float]] = {}
+    cur_mtl: str | None = None
+
+    for raw in path.read_text(encoding="utf-8", errors="ignore").splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#"):
+            continue
+        parts = line.split()
+        tag = parts[0]
+        if tag == "mtllib" and len(parts) >= 2:
+            mp = path.parent / " ".join(parts[1:])
+            if mp.exists():
+                mname = None
+                for ml in mp.read_text(encoding="utf-8", errors="ignore").splitlines():
+                    ms = ml.strip().split()
+                    if not ms:
+                        continue
+                    if ms[0] == "newmtl" and len(ms) >= 2:
+                        mname = ms[1]
+                    elif ms[0] == "Kd" and mname is not None and len(ms) >= 4:
+                        try:
+                            mtl_colors[mname] = [float(ms[1]), float(ms[2]), float(ms[3])]
+                        except ValueError:
+                            pass
+        elif tag == "usemtl" and len(parts) >= 2:
+            cur_mtl = parts[1]
+        elif tag == "v" and len(parts) >= 4:
+            verts.append([float(parts[1]), float(parts[2]), float(parts[3])])
+            if len(parts) >= 7:
+                vcols.append([float(parts[4]), float(parts[5]), float(parts[6])])
+            else:
+                vcols.append(None)
+        elif tag == "f" and len(parts) >= 4:
+            idxs = []
+            for tok in parts[1:]:
+                vi = int(tok.split("/")[0])
+                idxs.append(vi - 1 if vi > 0 else len(verts) + vi)
+            fc = mtl_colors.get(cur_mtl) if cur_mtl else None
+            for k in range(1, len(idxs) - 1):
+                faces.append((idxs[0], idxs[k], idxs[k + 1]))
+                face_cols.append(fc)
+
+    if not verts or not faces:
+        raise ValueError(f"Empty or invalid OBJ mesh: {path}")
+    v_arr = np.asarray(verts, dtype=np.float32)
+    f_arr = np.asarray(faces, dtype=np.int64)
+    has_vc = all(c is not None for c in vcols)
+    if has_vc:
+        vc_arr = np.clip(np.asarray(vcols, dtype=np.float32), 0.0, 1.0)
+        tri_cols = (vc_arr[f_arr[:, 0]] + vc_arr[f_arr[:, 1]] + vc_arr[f_arr[:, 2]]) / 3.0
+    elif any(c is not None for c in face_cols):
+        tri_cols = np.asarray([c if c is not None else [0.62, 0.62, 0.62] for c in face_cols], dtype=np.float32)
+    else:
+        tri_cols = None
+    return v_arr, f_arr, tri_cols
+
+
+def _load_stl_mesh(path: Path) -> tuple[np.ndarray, np.ndarray, np.ndarray | None]:
+    """Pure-NumPy ASCII and binary STL loader."""
+    import struct
+
+    raw = path.read_bytes()
+    if len(raw) >= 84:
+        n_tris = struct.unpack_from("<I", raw, 80)[0]
+        if 84 + n_tris * 50 == len(raw) and n_tris > 0:
+            dt = np.dtype([("n", "<f4", 3), ("v", "<f4", (3, 3)), ("attr", "<u2")])
+            data = np.frombuffer(raw, dtype=dt, offset=84, count=n_tris)
+            v_arr = data["v"].reshape(-1, 3).astype(np.float32)
+            f_arr = np.arange(len(v_arr), dtype=np.int64).reshape(-1, 3)
+            return v_arr, f_arr, None
+
+    verts = []
+    for line in raw.decode("utf-8", errors="ignore").splitlines():
+        s = line.strip().split()
+        if len(s) >= 4 and s[0].lower() == "vertex":
+            verts.append([float(s[1]), float(s[2]), float(s[3])])
+    if len(verts) < 3:
+        raise ValueError(f"Empty or invalid STL mesh: {path}")
+    n3 = (len(verts) // 3) * 3
+    v_arr = np.asarray(verts[:n3], dtype=np.float32)
+    f_arr = np.arange(n3, dtype=np.int64).reshape(-1, 3)
+    return v_arr, f_arr, None
+
+
+def _load_ply_mesh(path: Path) -> tuple[np.ndarray, np.ndarray, np.ndarray | None]:
+    """Pure-NumPy ASCII PLY mesh loader (with optional RGB vertex colors)."""
+    lines = path.read_text(encoding="utf-8", errors="ignore").splitlines()
+    n_verts = 0
+    n_faces = 0
+    v_props: list[str] = []
+    in_vert = False
+    hdr_end = 0
+    for i, line in enumerate(lines):
+        s = line.strip().split()
+        if not s:
+            continue
+        if s[0] == "format" and len(s) >= 2 and s[1] != "ascii":
+            raise ValueError(f"Only ASCII PLY is supported natively (got {s[1]}): {path}")
+        if s[0] == "element":
+            in_vert = s[1] == "vertex"
+            if s[1] == "vertex":
+                n_verts = int(s[2])
+            elif s[1] == "face":
+                n_faces = int(s[2])
+        elif s[0] == "property" and in_vert:
+            v_props.append(s[-1].lower())
+        elif s[0] == "end_header":
+            hdr_end = i + 1
+            break
+    if n_verts <= 0:
+        raise ValueError(f"No vertices in PLY: {path}")
+    ix = v_props.index("x") if "x" in v_props else 0
+    iy = v_props.index("y") if "y" in v_props else 1
+    iz = v_props.index("z") if "z" in v_props else 2
+    has_rgb = all(k in v_props for k in ("red", "green", "blue"))
+    ir = v_props.index("red") if has_rgb else -1
+    ig = v_props.index("green") if has_rgb else -1
+    ib = v_props.index("blue") if has_rgb else -1
+
+    verts = np.zeros((n_verts, 3), dtype=np.float32)
+    vcols = np.zeros((n_verts, 3), dtype=np.float32) if has_rgb else None
+    for i in range(n_verts):
+        toks = lines[hdr_end + i].split()
+        verts[i] = [float(toks[ix]), float(toks[iy]), float(toks[iz])]
+        if vcols is not None:
+            rgb = np.array([float(toks[ir]), float(toks[ig]), float(toks[ib])], dtype=np.float32)
+            vcols[i] = rgb / 255.0 if rgb.max() > 1.0 else rgb
+
+    faces: list[tuple[int, int, int]] = []
+    for i in range(n_faces):
+        if hdr_end + n_verts + i >= len(lines):
+            break
+        toks = lines[hdr_end + n_verts + i].split()
+        cnt = int(toks[0])
+        idxs = [int(x) for x in toks[1 : 1 + cnt]]
+        for k in range(1, len(idxs) - 1):
+            faces.append((idxs[0], idxs[k], idxs[k + 1]))
+
+    if not faces:
+        # Point-cloud fallback: degenerate tiny triangles at vertices
+        f_arr = np.stack([np.arange(n_verts), np.arange(n_verts), np.arange(n_verts)], axis=-1).astype(np.int64)
+    else:
+        f_arr = np.asarray(faces, dtype=np.int64)
+    tri_cols = None
+    if vcols is not None:
+        tri_cols = (vcols[f_arr[:, 0]] + vcols[f_arr[:, 1]] + vcols[f_arr[:, 2]]) / 3.0
+    return verts, f_arr, tri_cols
+
+
+def _fill_interior_voxels_3d(shell: np.ndarray) -> np.ndarray:
+    """Fill enclosed interior cavities of a `(G, G, G)` boolean surface shell via exterior 6-connected flood fill."""
+    from collections import deque
+
+    g0, g1, g2 = shell.shape
+    padded = np.zeros((g0 + 2, g1 + 2, g2 + 2), dtype=bool)
+    padded[1:-1, 1:-1, 1:-1] = shell
+    ext = np.zeros_like(padded)
+    q = deque([(0, 0, 0)])
+    ext[0, 0, 0] = True
+    while q:
+        x, y, z = q.popleft()
+        for dx, dy, dz in ((1, 0, 0), (-1, 0, 0), (0, 1, 0), (0, -1, 0), (0, 0, 1), (0, 0, -1)):
+            nx, ny, nz = x + dx, y + dy, z + dz
+            if 0 <= nx < g0 + 2 and 0 <= ny < g1 + 2 and 0 <= nz < g2 + 2:
+                if not padded[nx, ny, nz] and not ext[nx, ny, nz]:
+                    ext[nx, ny, nz] = True
+                    q.append((nx, ny, nz))
+    return ~ext[1:-1, 1:-1, 1:-1]
+
+
+def mesh_to_blueprint(
+    mesh_path: str | Path,
+    g: int = BP_G,
+    target_span_ldu: float = 240.0,
+    up_axis: str = "y",
+    default_rgb: tuple[float, float, float] = (0.62, 0.62, 0.62),
+    fill_interior: bool = True,
+    n_samples: int = 36_000,
+    seed: int = 0,
+) -> tuple[np.ndarray, np.ndarray, int]:
+    """Convert any external 3D triangle mesh (`.obj`, `.stl`, `.ply` from TRELLIS/Hunyuan3D/Blender)
+    into a canonical `(grid[5, G, G, G], scale_vec[4], n_tris)` BrickGen v3 colored 3D blueprint!
+    """
+    p = Path(mesh_path)
+    ext = p.suffix.lower()
+    if ext == ".obj":
+        verts, faces, tri_cols = _load_obj_mesh(p)
+    elif ext == ".stl":
+        verts, faces, tri_cols = _load_stl_mesh(p)
+    elif ext == ".ply":
+        verts, faces, tri_cols = _load_ply_mesh(p)
+    else:
+        raise ValueError(f"Unsupported mesh format '{ext}'. Supported: .obj, .stl, .ply")
+
+    v = verts.astype(np.float64).copy()
+    if up_axis.lower() == "z":
+        # Map Z-up (x, y, z) -> Y-up (x, z, -y)
+        v = np.stack([v[:, 0], v[:, 2], -v[:, 1]], axis=-1)
+
+    # Align longest horizontal axis along Z (matches BrickGen canonical frame)
+    lo0, hi0 = v.min(axis=0), v.max(axis=0)
+    span0 = np.maximum(hi0 - lo0, 1e-6)
+    if span0[0] > span0[2] * 1.05:
+        v = np.stack([v[:, 2], v[:, 1], -v[:, 0]], axis=-1)
+        lo0, hi0 = v.min(axis=0), v.max(axis=0)
+        span0 = np.maximum(hi0 - lo0, 1e-6)
+
+    # Scale cleanly into LEGO LDU with bottom at y_up=0 and centered X/Z
+    scale_f = float(target_span_ldu) / float(span0.max())
+    cx = 0.5 * (lo0[0] + hi0[0])
+    cz = 0.5 * (lo0[2] + hi0[2])
+    v[:, 0] = (v[:, 0] - cx) * scale_f
+    v[:, 1] = (v[:, 1] - lo0[1]) * scale_f
+    v[:, 2] = (v[:, 2] - cz) * scale_f
+
+    lo, hi = v.min(axis=0), v.max(axis=0)
+    span = np.maximum(hi - lo, 20.0)
+    cube_s = max(2.0 * max(abs(float(lo[0])), abs(float(hi[0]))), float(hi[1]), 2.0 * max(abs(float(lo[2])), abs(float(hi[2]))), 80.0)
+    scale_vec = np.array([float(span[0]), float(span[1]), float(span[2]), float(cube_s)], dtype=np.float32)
+
+    # Uniform area-weighted surface point sampling across all triangles
+    v0 = v[faces[:, 0]]
+    v1 = v[faces[:, 1]]
+    v2 = v[faces[:, 2]]
+    areas = 0.5 * np.linalg.norm(np.cross(v1 - v0, v2 - v0), axis=-1)
+    area_sum = float(areas.sum())
+    rng = np.random.default_rng(seed)
+    if area_sum > 1e-9:
+        probs = areas / area_sum
+        tri_idx = rng.choice(len(faces), size=n_samples, p=probs)
+        r1 = np.sqrt(rng.random(n_samples))[:, None]
+        r2 = rng.random(n_samples)[:, None]
+        pts = (1.0 - r1) * v0[tri_idx] + (r1 * (1.0 - r2)) * v1[tri_idx] + (r1 * r2) * v2[tri_idx]
+        # Also include all triangle vertices so sharp corners never drop out
+        pts = np.concatenate([pts, v], axis=0)
+        if tri_cols is not None:
+            pcols = np.concatenate([tri_cols[tri_idx], np.tile(np.asarray(default_rgb, dtype=np.float32), (len(v), 1))], axis=0)
+        else:
+            pcols = None
+    else:
+        pts = v
+        pcols = None
+
+    ix = np.clip(np.floor((pts[:, 0] / cube_s + 0.5) * g).astype(np.int32), 0, g - 1)
+    iy = np.clip(np.floor((pts[:, 1] / cube_s) * g).astype(np.int32), 0, g - 1)
+    iz = np.clip(np.floor((pts[:, 2] / cube_s + 0.5) * g).astype(np.int32), 0, g - 1)
+
+    shell = np.zeros((g, g, g), dtype=bool)
+    shell[ix, iy, iz] = True
+    occ = _fill_interior_voxels_3d(shell) if fill_interior else shell
+    occ = keep_largest_component_3d(occ)
+
+    grid = np.zeros((BP_CH, g, g, g), dtype=np.float32)
+    grid[0] = occ.astype(np.float32)
+    def_rgb = np.asarray(default_rgb, dtype=np.float32)
+    if pcols is not None:
+        csum = np.zeros((3, g, g, g), dtype=np.float32)
+        ccnt = np.zeros((g, g, g), dtype=np.float32)
+        for k in range(3):
+            np.add.at(csum[k], (ix, iy, iz), pcols[:, k])
+        np.add.at(ccnt, (ix, iy, iz), 1.0)
+        mean_rgb = np.where(ccnt[None] > 0, csum / np.maximum(ccnt[None], 1.0), def_rgb[:, None, None, None])
+        # Propagate surface color inward to interior filled voxels using mean surface color
+        surf_mean = pcols.mean(axis=0) if len(pcols) else def_rgb
+        interior_only = occ & (ccnt == 0)
+        for k in range(3):
+            mean_rgb[k][interior_only] = surf_mean[k]
+        grid[1:4] = np.where(occ[None], np.clip(mean_rgb, 0.0, 1.0), 0.0)
+    else:
+        for k in range(3):
+            grid[1 + k] = np.where(occ, def_rgb[k], 0.0)
+    return grid, scale_vec, len(faces)
+
+
 def render_blueprint_preview(
     grid: np.ndarray,
     out_path: str | Path | None = None,

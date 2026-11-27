@@ -577,3 +577,63 @@ TEST_CASE("neural shader executes deterministically across odd viewport sizes an
     REQUIRE(std::abs(int(n1.at(x, y)[0]) - int(b1.at(x, y)[0])) <= 5);
   }
 }
+
+TEST_CASE("real-time path tracing renders opaque, glass, and floor live across odd sizes, orbits cleanly, and supports picking", "[gpu][frame][rtpt]") {
+  NEED_GPU();
+  const std::string text = piece("3005.dat", 0, 0, 0, 4) + piece("3001.dat", 30, 0, 0, 14) + piece("3005.dat", 0, -24, 0, 36);
+  bmtest::GpuRig rig(text, 251, 189);
+  REQUIRE(rig.renderer);
+
+  FrameOptions rtpt;
+  rtpt.realtimePathTrace = true;
+  rtpt.pathMaxSamples = 16;
+
+  // Frame 1 cold start + stationary convergence over 8 frames.
+  FrameStats s1 = rig.renderer->draw(rig.camera, rtpt);
+  REQUIRE(s1.submitted);
+  REQUIRE(s1.pathSamples == 1);
+  REQUIRE(s1.settling);
+  const Image f1 = rig.renderer->readback();
+  REQUIRE(f1.width == 251);
+  REQUIRE(f1.height == 189);
+
+  FrameStats sN{};
+  for (int i = 1; i < 8; i++) sN = rig.renderer->draw(rig.camera, rtpt);
+  REQUIRE(sN.submitted);
+  REQUIRE(sN.pathSamples == 8);
+  const Image f8 = rig.renderer->readback();
+
+  // Top sky corners stay clean white and model center is non-black with realistic brick luminance.
+  for (auto [x, y] : {std::pair{2, 2}, {248, 2}}) {
+    REQUIRE(f8.at(x, y)[0] > 248);
+    REQUIRE(f8.at(x, y)[1] > 248);
+    REQUIRE(f8.at(x, y)[2] > 248);
+  }
+  double meanLum = 0.0;
+  for (int y = 0; y < f8.height; y++)
+    for (int x = 0; x < f8.width; x++) meanLum += luminance(f8.at(x, y));
+  meanLum /= static_cast<double>(f8.width * f8.height);
+  REQUIRE(meanLum > 120.0);
+  REQUIRE(meanLum < 252.0);
+
+  // Live orbiting frames keep running (never drop to raster or black) and reset still counter to 1.
+  OrbitCamera orbit = OrbitCamera::framing(rig.renderer->scene().bounds, 0.6, 251.0 / 189.0);
+  FrameStats sm{};
+  for (int i = 0; i < 4; i++) {
+    orbit.azimuth += 0.12;
+    sm = rig.renderer->draw(orbit.camera(251.0 / 189.0, rig.renderer->scene().bounds), rtpt);
+    REQUIRE(sm.submitted);
+    REQUIRE(sm.pathSamples == 1);
+  }
+  const Image moved = rig.renderer->readback();
+  REQUIRE(compare(moved, f8).meanAbs > 1.0);
+  for (auto [x, y] : {std::pair{2, 2}, {248, 2}}) {
+    REQUIRE(moved.at(x, y)[0] > 248);
+  }
+
+  // Picking works accurately immediately after an RTPT frame.
+  const auto [px, py] = rig.pixel({0, 0, 0});
+  rig.renderer->draw(rig.camera, rtpt);
+  const uint32_t hit = rig.renderer->pick(px, py);
+  REQUIRE(hit != UINT32_MAX);
+}

@@ -45,13 +45,24 @@ class BlueprintFlowConfig:
     grid_size: int = BP_G
     patch_size: int = BP_PATCH
     channels: int = BP_CH
+    # Unbiased Rectified Flow loss weights (1.0 = exact unbiased velocity field, zero prior tilt!)
+    occ_weight: float = 1.0
+    col_pos_weight: float = 1.0
+    col_neg_weight: float = 1.0
 
     def to_dict(self) -> dict:
         return asdict(self)
 
     @classmethod
     def from_dict(cls, d: dict) -> "BlueprintFlowConfig":
-        return cls(**d)
+        valid = {f.name for f in cls.__dataclass_fields__.values()}
+        kw = {k: v for k, v in d.items() if k in valid}
+        # Legacy v3.0 checkpoints omitted loss weights and were trained with (3.5, 3.0, 0.20)
+        if "occ_weight" not in d:
+            kw["occ_weight"] = 3.5
+            kw["col_pos_weight"] = 3.0
+            kw["col_neg_weight"] = 0.20
+        return cls(**kw)
 
 
 BP_PRESETS = {
@@ -353,19 +364,26 @@ class BlueprintFlow3D(nn.Module):
         pred_g = pred_g.float()
         pred_s = pred_s.float()
 
-        # Occupancy loss (weighted 3.5x on occupied cells so thin wings/wheels/spoilers stay crisp!)
+        # Occupancy loss (v3.5 default: unbiased w=1.0 so Rectified Flow velocity has ZERO prior tilt!)
         occ_mask = grid[:, 0] > 0.5  # (B, G, G, G)
         occ_err = (pred_g[:, 0] - v_tgt_g[:, 0]).pow(2)
-        occ_w = torch.where(occ_mask, 3.5, 1.0)
-        loss_occ = (occ_err * occ_w).sum() / occ_w.sum().clamp(min=1.0)
+        if abs(self.cfg.occ_weight - 1.0) > 1e-4:
+            occ_w = torch.where(occ_mask, float(self.cfg.occ_weight), 1.0)
+            loss_occ = (occ_err * occ_w).sum() / occ_w.sum().clamp(min=1.0)
+        else:
+            loss_occ = occ_err.mean()
 
-        # Color + translucency loss (only supervised on color-labeled LEGO models!)
+        # Color + translucency loss (only supervised on color-labeled LEGO models; unbiased 1.0:1.0 by default!)
         hc = has_color.to(dev, dtype=torch.bool)
         if hc.any():
             col_err = (pred_g[hc, 1:5] - v_tgt_g[hc, 1:5]).pow(2)
-            # Strong supervision inside occupied voxels (3.0), light zero-pull outside (0.20)
-            cw = torch.where(occ_mask[hc].unsqueeze(1), 3.0, 0.20).expand_as(col_err)
-            loss_col = (col_err * cw).sum() / cw.sum().clamp(min=1.0)
+            if abs(self.cfg.col_pos_weight - self.cfg.col_neg_weight) > 1e-4:
+                cw = torch.where(
+                    occ_mask[hc].unsqueeze(1), float(self.cfg.col_pos_weight), float(self.cfg.col_neg_weight)
+                ).expand_as(col_err)
+                loss_col = (col_err * cw).sum() / cw.sum().clamp(min=1.0)
+            else:
+                loss_col = col_err.mean()
         else:
             loss_col = torch.zeros((), device=dev)
 
@@ -405,17 +423,24 @@ class BlueprintFlow3D(nn.Module):
         source_id: torch.Tensor | None = None,
         scale_id: torch.Tensor | None = None,
         n_steps: int = 32,
-        cfg_scale: float = 4.0,
+        cfg_scale: float = 3.2,
         symmetric: bool = True,
-        occ_thresh: float = 0.45,
+        occ_thresh: float = 0.50,
+        debias_occ: float | None = None,
+        debias_col_pos: float | None = None,
+        debias_col_neg: float | None = None,
         seed: int = 0,
     ) -> tuple[np.ndarray, np.ndarray, list[int]]:
-        """2nd-order Heun Rectified Flow ODE sampler -> `(grids[B,5,G,G,G], scales[B,4], est_parts[B])`."""
+        """2nd-order Heun Rectified Flow ODE sampler with auto Bayesian debiasing -> `(grids, scales, est_parts)`."""
         self.eval()
         b = text_pooled.shape[0]
         dev = text_pooled.device
         dtype = self.null_text.dtype
         gen = torch.Generator(device="cpu").manual_seed(seed)
+
+        d_occ = float(self.cfg.occ_weight if debias_occ is None else debias_occ)
+        d_cpos = float(self.cfg.col_pos_weight if debias_col_pos is None else debias_col_pos)
+        d_cneg = float(self.cfg.col_neg_weight if debias_col_neg is None else debias_col_neg)
 
         x_g = torch.randn((b, self.cfg.channels, self.cfg.grid_size, self.cfg.grid_size, self.cfg.grid_size), generator=gen).to(dev)
         x_s = torch.randn((b, BP_SCALE_DIM), generator=gen).to(dev)
@@ -424,6 +449,25 @@ class BlueprintFlow3D(nn.Module):
             x_g = (x_g + torch.flip(x_g, dims=[2])) / math.sqrt(2.0)
 
         use_cfg = cfg_scale > 1.0 + 1e-4
+        do_debias = (abs(d_occ - 1.0) > 1e-4) or (abs(d_cpos - d_cneg) > 1e-4)
+
+        def _debias_joint(xg: torch.Tensor, vg: torch.Tensor, t_val: float) -> torch.Tensor:
+            """Closed-form inversion of weighted-MSE posterior tilt for legacy checkpoints (no-op when unbiased w=1.0)."""
+            if not do_debias or t_val >= 0.99:
+                return vg
+            omt = 1.0 - t_val
+            m0_b = (xg[:, 0] + omt * vg[:, 0]).clamp(-0.999, 0.999)
+            p0_b = (m0_b + 1.0) * 0.5
+            p_true = p0_b / (p0_b + d_occ * (1.0 - p0_b))
+            m0_true = 2.0 * p_true - 1.0
+
+            mc_b = (xg[:, 1:5] + omt * vg[:, 1:5]).clamp(-1.0, 1.0)
+            pt = p_true.unsqueeze(1)
+            denom_c = d_cpos * pt + d_cneg * (1.0 - pt)
+            pc_occ = ((mc_b * denom_c + d_cneg * (1.0 - pt)) / d_cpos).clamp(-pt, pt)
+            mc_true = (pc_occ - (1.0 - pt)).clamp(-1.0, 1.0)
+            m_true = torch.cat([m0_true.unsqueeze(1), mc_true], dim=1)
+            return (m_true - xg) / omt
 
         def _vel(xg: torch.Tensor, xs: torch.Tensor, t_val: float) -> tuple[torch.Tensor, torch.Tensor]:
             t_t = torch.full((b,), t_val, device=dev, dtype=torch.float32)
@@ -438,11 +482,13 @@ class BlueprintFlow3D(nn.Module):
                 scl2 = torch.cat([scale_id, torch.zeros_like(scale_id)], dim=0) if scale_id is not None else None
                 drop = torch.cat([torch.zeros(b, dtype=torch.bool, device=dev), torch.ones(b, dtype=torch.bool, device=dev)])
                 vg2, vs2 = self.forward(xg2, xs2, t2, tp2, tt2, tm2, src2, scl2, drop_text_mask=drop)
-                vg = vg2[b:].float() + cfg_scale * (vg2[:b].float() - vg2[b:].float())
+                vg_c = _debias_joint(xg, vg2[:b].float(), t_val)
+                vg_u = _debias_joint(xg, vg2[b:].float(), t_val)
+                vg = vg_u + cfg_scale * (vg_c - vg_u)
                 vs = vs2[b:].float() + cfg_scale * (vs2[:b].float() - vs2[b:].float())
             else:
                 vg, vs = self.forward(xg.to(dtype), xs.to(dtype), t_t, text_pooled, text_tokens, text_mask, source_id, scale_id)
-                vg, vs = vg.float(), vs.float()
+                vg, vs = _debias_joint(xg, vg.float(), t_val), vs.float()
             if symmetric:
                 vg = 0.5 * (vg + torch.flip(vg, dims=[2]))
             return vg, vs

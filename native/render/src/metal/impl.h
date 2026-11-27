@@ -120,7 +120,9 @@ struct CasterMap {
 
 struct Pipelines {
   id<MTLRenderPipelineState> height = nil, brick = nil, glass = nil, glassDepth = nil, glassPreview = nil, transparent = nil, floor = nil, edges = nil, shadow = nil, composite = nil, mask = nil, ids = nil, ao = nil, aoBlur = nil, sspt = nil, ssptBlur = nil, rmidtFront = nil, rmidtBack = nil, rmidtResolve = nil, pathResolve = nil, lens = nil;
+  id<MTLRenderPipelineState> rtptGbufOpaque = nil, rtptGbufGlass = nil, rtptGbufFloor = nil, rtptPresent = nil;
   id<MTLComputePipelineState> pathTrace = nil, hybridRtGlass = nil, hybridRtGiRefl = nil, hybridRtTemporal = nil, neuralFeatures = nil, neuralInfer = nil;
+  id<MTLComputePipelineState> rtptSharcResolve = nil, rtptDirectPass = nil, rtptTraceFloor = nil, rtptTraceOpaque = nil, rtptTraceGlass = nil, rtptSvgfTemporal = nil, rtptSvgfAtrous = nil, rtptResolveTaa = nil;
   id<MTLDepthStencilState> depthWrite = nil, depthWriteLess = nil, depthRead = nil, depthNone = nil, shadowDepth = nil;
   id<MTLSamplerState> smooth = nil, shadowSampler = nil;
   bool ok = false;
@@ -175,6 +177,8 @@ struct Renderer::Impl {
   id<MTLTexture> giHist[2] = {nil, nil}, ssrHist[2] = {nil, nil}, rtDepthHist[2] = {nil, nil};  // hybrid RT temporal history, half size
   simd_float4x4 hybridPrevViewProj = matrix_identity_float4x4;
   bool hybridHasHistory = false;
+  float hybridBg[3] = {1, 1, 1};
+  bool hybridFloor = true, hybridLightsFollow = false, hybridShadows = true, hybridAo = true;
   uint32_t hybridFrameIdx = 0;
   uint32_t hybridStillFrames = 0;
   id<MTLTexture> glassFront = nil, glassMat = nil, glassBackNear = nil, glassBackFar = nil, glassDepthTex = nil, glassResolved = nil;  // RMIDT glass, full size
@@ -243,6 +247,33 @@ struct Renderer::Impl {
   bool ptFloor = true, ptLightsFollow = false;
   float ptBg[3] = {1, 1, 1};
   FrameStats drawPathTraced(const Camera& camera, const FrameOptions& options, id<CAMetalDrawable> drawable);
+
+  // Real-Time Path Tracing (Adaptive Control-Variate Studio RT + SHaRC + Dual-Lobe VNDF + Demodulated SVGF + Halton TAA/Progressive).
+  id<MTLTexture> rtptDepth = nil;
+  id<MTLTexture> rtptPosId[2] = {nil, nil}, rtptNorm[2] = {nil, nil};
+  id<MTLTexture> rtptMat = nil, rtptMotion = nil;
+  id<MTLTexture> rtptDi = nil;
+  id<MTLTexture> rtptDiffRaw = nil, rtptSpecRaw = nil;
+  id<MTLTexture> rtptDiffHist[2] = {nil, nil}, rtptSpecHist[2] = {nil, nil};
+  id<MTLTexture> rtptMoments[2] = {nil, nil}, rtptHLen[2] = {nil, nil};
+  id<MTLTexture> rtptDiffPing = nil, rtptSpecPing = nil, rtptDiffPong = nil, rtptSpecPong = nil;
+  id<MTLTexture> rtptTaa[2] = {nil, nil};
+  id<MTLBuffer> rtptSharcAccum = nil, rtptSharcResolved = nil;
+  id<MTLBuffer> rtptPoses[3] = {nil, nil, nil};
+  uint32_t rtptPoseCapacity = 0;
+  int rtptPrevPoseSlot = -1;
+  bool rtptHasPrevPose = false;
+  int rtptW = 0, rtptH = 0;
+  uint32_t rtptFrameIdx = 0;
+  uint32_t rtptStillFrames = 0;
+  bool rtptHasHistory = false;
+  uint64_t rtptLastChange = UINT64_MAX;
+  simd_float4x4 rtptPrevViewProj = matrix_identity_float4x4;
+  float rtptPrevJitter[2] = {0, 0};
+  Camera rtptLastCamera;
+  bool rtptLastFloor = true, rtptLastLightsFollow = false, rtptLastClay = false;
+  float rtptLastBg[3] = {1, 1, 1};
+  FrameStats drawRealtimePathTraced(const Camera& camera, const FrameOptions& options, id<CAMetalDrawable> drawable);
 
   FrameBuffer frameUniforms, drawUniforms, visible, floorBins;
   id<MTLBuffer> neuralWeightsBuffer = nil;

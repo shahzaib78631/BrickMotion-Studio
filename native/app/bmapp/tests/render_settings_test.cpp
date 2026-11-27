@@ -331,7 +331,8 @@ TEST_CASE("every shading draws its own picture of the model", "[bmapp][look][vie
   const auto standard = picture(bmapp::Shading::Standard);
   REQUIRE(standard.size() == 160u * 120 * 4);
   for (const auto shading : {bmapp::Shading::Studio, bmapp::Shading::Neural, bmapp::Shading::HybridRT,
-                             bmapp::Shading::ScreenSpaceGI, bmapp::Shading::PathTraced}) {
+                             bmapp::Shading::ScreenSpaceGI, bmapp::Shading::PathTraced,
+                             bmapp::Shading::RealTimePathTraced}) {
     INFO("shading " << static_cast<int>(shading));
     const auto drawn = picture(shading);
     REQUIRE(drawn.size() == standard.size());

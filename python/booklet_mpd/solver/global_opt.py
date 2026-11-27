@@ -1229,3 +1229,227 @@ def polish_bilateral_symmetry_multiview(lib, assemblies: list[dict], out, step_p
                         log({"global_opt": "symmetry_multiview_polish", "step": si + 1, "part": p,
                              "delta_comb": round(scores[best_l][0] - scores[0][0], 4)})
     return changes
+
+
+# ------------------------------------------------------------------ 8. SCANet Multi-View Retroactive Error Localization & Stereo Self-Correction
+
+def _view_angle_deg(a: View, b: View) -> float:
+    r = np.asarray(a.matrix, float)[:3, :3] @ np.asarray(b.matrix, float)[:3, :3].T
+    return float(np.degrees(np.arccos(np.clip((np.trace(r) - 1.0) * 0.5, -1.0, 1.0))))
+
+
+def scanet_multiview_correct(lib, assemblies: list[dict], out, step_pics: list,
+                             step_views: dict[int, View], step_alts: dict[int, list[State]],
+                             collider=None, log=None) -> int:
+    """Pass E (SCANet, IROS 2024): Multi-view retroactive error localization & stereo self-correction.
+
+    When later booklet pages rotate the assembly by >= 60 deg (e.g. 90/180-deg back/side turns),
+    earlier occluded or visually-tied bricks become directly visible! This pass:
+      1. Pairs each earlier step `si` with up to 2 maximally separated future viewpoints (`angle >= 60 deg`).
+      2. Re-evaluates saved `step_alts[si]` AND single-brick collision-free, physically mated candidate
+         repairs (in-place 90/180/270 yaw flips + top rotated-view connector mates) jointly across
+         `(step si view, rotated future views)` using ModelScorer + FoundPose DINOv2 + BrickPriorNet v3.
+      3. Accepts strictly under dual visual agreement + zero collision against the ENTIRE assembly +
+         no step-`si` regression!
+    """
+    from . import brick_prior
+    from .place import distinct
+
+    bp = brick_prior.prior()
+    has_nat = collider is not None and getattr(collider, "native", None) is not None
+    changes = 0
+
+    for asm in assemblies:
+        s_indices = [si for si in asm["step_indices"] if out.groups[si]]
+        if len(s_indices) < 6:
+            continue
+
+        # Collect steps with valid registered views
+        viewed = [(pos, si, step_views[si]) for pos, si in enumerate(s_indices)
+                  if step_pics[si][0] is not None and step_views.get(si) is not None]
+        if len(viewed) < 3:
+            continue
+
+        for pos, si, v_cur in viewed[:-1]:
+            grp = out.groups[si]
+            if not grp or len(grp) > 6:
+                continue
+            rgb_cur, pts_cur, _ = step_pics[si]
+            # Find future views rotated >= 60 deg from `v_cur`!
+            rot_futs = []
+            for _p2, fsi, vf in viewed:
+                if fsi <= si:
+                    continue
+                ang = _view_angle_deg(v_cur, vf)
+                if ang >= 60.0:
+                    rot_futs.append((ang, fsi, vf))
+            if not rot_futs:
+                continue
+            # Pick up to 2 diverse rotated views (earliest strong turn + largest-angle/latest turn)
+            rot_futs.sort(key=lambda x: (x[1]))
+            pick_rot = [rot_futs[0][1]]
+            widest = max(rot_futs, key=lambda x: (x[0], x[1]))[1]
+            if widest not in pick_rot:
+                pick_rot.append(widest)
+
+            before_parts = [e for s2 in s_indices[:pos] for e in out.groups[s2]]
+            after_parts = [e for s2 in s_indices[pos + 1:] for e in out.groups[s2]]
+            other_all = before_parts + after_parts
+            if not before_parts:
+                continue
+
+            # Guard: verify `v_cur` is still aligned to `before_parts + grp`
+            pic_cur = Picture.from_rgb(rgb_cur, pts_cur, BOOKLET_SCALE / pts_cur if pts_cur else None)
+            if float(view_fit_metrics(lib, before_parts + grp, pic_cur, v_cur)[0]) < 0.72:
+                continue
+
+            # --- E1: Re-rank saved step_alts[si] on (step si + rotated future views) ---
+            alts = step_alts.get(si)
+            if alts:
+                if collider is not None:
+                    collider.set_model(other_all)
+                valid_cands = [(grp, grp)]
+                seen_k = {frozenset((p, c, tuple(np.round(np.asarray(m, float)[:3, 3], 1)),
+                                     tuple(np.round(np.asarray(m, float)[:3, :3].ravel(), 1))) for p, c, m in grp)}
+                for st in alts[:4]:
+                    if len(st.placed) != len(grp):
+                        continue
+                    pl_c = [(p, c, clean_matrix(m)) for p, c, m in st.placed]
+                    k = frozenset((p, c, tuple(np.round(m[:3, 3], 1)), tuple(np.round(m[:3, :3].ravel(), 1))) for p, c, m in pl_c)
+                    if k in seen_k:
+                        continue
+                    if collider is not None and any(collider.hits(p, m) for p, _c, m in pl_c):
+                        continue
+                    seen_k.add(k)
+                    dr_c = [(p, c, clean_matrix(m)) for p, c, m in _drawn_entries(pl_c, st.scores)]
+                    valid_cands.append((pl_c, dr_c))
+                if len(valid_cands) > 1:
+                    eval_pages = [(before_parts, [], rgb_cur, pts_cur, v_cur)]
+                    cand_pp = [[dr] for _se, dr in valid_cands]
+                    for fsi in pick_rot:
+                        st_f = [e for s2 in s_indices if s2 <= fsi and s2 != si for e in out.groups[s2]]
+                        eval_pages.append((st_f, [], step_pics[fsi][0], step_pics[fsi][1], step_views[fsi]))
+                        for ci_v, (se, _dr) in enumerate(valid_cands):
+                            cand_pp[ci_v].append(se)
+                    sc_all = _eval_multiview_score(lib, eval_pages, cand_pp, use_dino=True)
+                    bp_arr = np.zeros(len(valid_cands), dtype=np.float64)
+                    if bp is not None:
+                        try:
+                            raw_bp = bp.score_layouts_batch(before_parts, [se for se, _dr in valid_cands], max_neighbors=4, radius=70.0)
+                            bp_arr = np.clip(0.012 * (raw_bp - float(np.mean(raw_bp))) / max(1, len(grp)), -0.025, 0.025)
+                        except Exception:
+                            pass
+                    tot_arr = [sc_all[i][0] + float(bp_arr[i]) for i in range(len(valid_cands))]
+                    best_ci = int(np.argmax(tot_arr))
+                    if (best_ci != 0 and tot_arr[best_ci] > tot_arr[0] + 0.022
+                            and sc_all[best_ci][1] > sc_all[0][1] + 0.005
+                            and sc_all[best_ci][2] >= sc_all[0][2] - 0.001):
+                        out.groups[si] = valid_cands[best_ci][0]
+                        grp = out.groups[si]
+                        asm["parts"] = [e for s2 in asm["step_indices"] for e in out.groups[s2]]
+                        changes += 1
+                        if log:
+                            log({"global_opt": "scanet_stereo_alt", "step": si + 1, "rot_steps": [f + 1 for f in pick_rot],
+                                 "delta_comb": round(tot_arr[best_ci] - tot_arr[0], 4)})
+
+            # --- E2: Localized single-brick stereo repair for bricks hidden at step `si` & visible in `pick_rot[0]`! ---
+            fsi0 = pick_rot[0]
+            vf0 = step_views[fsi0]
+            rgb_f0, pts_f0, _ = step_pics[fsi0]
+            pic_f0 = Picture.from_rgb(rgb_f0, pts_f0, BOOKLET_SCALE / pts_f0 if pts_f0 else None)
+            # Check which bricks in `grp` were heavily occluded in `v_cur` (<30% visible) yet visible in `vf0`!
+            cur_full = before_parts + grp
+            _dc, lab_c = render(lib, cur_full, v_cur, pic_cur.rgb.shape[:2])
+            f0_steps = [s2 for s2 in s_indices if s2 <= fsi0]
+            f0_full = [e for s2 in f0_steps for e in out.groups[s2]]
+            _df, lab_f = render(lib, f0_full, vf0, pic_f0.rgb.shape[:2])
+            # Map each brick index `bi` in `grp` to its label in `cur_full` and `f0_full`
+            f0_off = sum(len(out.groups[s2]) for s2 in f0_steps if s2 < si)
+            n_before = len(before_parts)
+
+            for bi, (p, c, m) in enumerate(list(grp)):
+                vis_cur = int(np.count_nonzero(lab_c == (n_before + bi)))
+                vis_fut = int(np.count_nonzero(lab_f == (f0_off + bi)))
+                # Only trigger single-brick localization on bricks that were occluded/tiny at `si`
+                # and became clearly exposed (`>= 45 px` and `>= 1.8x` more visible!) in the rotated view!
+                if vis_fut < 45 or (vis_cur >= 80 and vis_fut < 1.8 * vis_cur):
+                    continue
+                m = np.asarray(m, float)
+                other_no_bi = before_parts + [e for k2, e in enumerate(grp) if k2 != bi] + after_parts
+                static_si = before_parts + [e for k2, e in enumerate(grp) if k2 != bi]
+                static_f0 = [e for s2 in f0_steps for k2, e in enumerate(out.groups[s2]) if not (s2 == si and k2 == bi)]
+
+                # Propose: (a) 90/180/270 in-place turns around brick center, (b) top-4 rotated-view mated candidates!
+                t_pts = world_triangles(lib, p, m).reshape(-1, 3)
+                ctr = 0.5 * (t_pts.min(0) + t_pts.max(0)) if len(t_pts) else m[:3, 3]
+                cand_mats = []
+                seen_mk = {tuple(np.round(m[:3, :4], 1).ravel())}
+                for kt in (1, 2, 3):
+                    _, rot_e = _rigid_rotate_around_y([(p, c, m)], (float(ctr[0]), float(ctr[2])), kt)
+                    mt = rot_e[0][2]
+                    mk = tuple(np.round(mt[:3, :4], 1).ravel())
+                    if mk not in seen_mk:
+                        seen_mk.add(mk)
+                        cand_mats.append(mt)
+                raw_c = distinct(lib, p, [q for q in candidates(lib, p, static_si) if q.get("kind") != "flush"])
+                if collider is not None:
+                    collider.set_model(other_no_bi)
+                legal_extra = []
+                for q in raw_c:
+                    qm = clean_matrix(np.asarray(q["matrix"], float))
+                    mk = tuple(np.round(qm[:3, :4], 1).ravel())
+                    if mk in seen_mk:
+                        continue
+                    if collider is not None and collider.hits(p, qm):
+                        continue
+                    legal_extra.append(q)
+                if legal_extra:
+                    codes_f0 = sorted({int(cc) for _pp, cc, _mm in static_f0} | {int(c)})
+                    sc_f0 = ModelScorer(lib, static_f0, pic_f0, vf0, codes_f0)
+                    pre_f0 = score_candidates_calibrated(lib, sc_f0, [], p, c, legal_extra, deltas=(0.0,))
+                    pre_f0.sort(key=lambda s: -s.score)
+                    for sc_item in pre_f0[:4]:
+                        qm = clean_matrix(np.asarray(sc_item.candidate["matrix"], float))
+                        mk = tuple(np.round(qm[:3, :4], 1).ravel())
+                        if mk not in seen_mk:
+                            seen_mk.add(mk)
+                            cand_mats.append(qm)
+
+                legal = [(p, c, clean_matrix(m))]
+                for cm in cand_mats:
+                    if collider is not None:
+                        if collider.hits(p, cm):
+                            continue
+                        if has_nat and collider.mates(p, cm)[0] <= 0:
+                            continue
+                    legal.append((p, c, cm))
+                if len(legal) <= 1:
+                    continue
+
+                # Score jointly on (step si view + rotated future views)
+                eval_pages = [(static_si, [], rgb_cur, pts_cur, v_cur)]
+                cand_pp = [[[e]] for e in legal]
+                for fsi in pick_rot:
+                    st_f = [e for s2 in s_indices if s2 <= fsi for k2, e in enumerate(out.groups[s2]) if not (s2 == si and k2 == bi)]
+                    eval_pages.append((st_f, [], step_pics[fsi][0], step_pics[fsi][1], step_views[fsi]))
+                    for ci_l, entry in enumerate(legal):
+                        cand_pp[ci_l].append([entry])
+                sc_b = _eval_multiview_score(lib, eval_pages, cand_pp, use_dino=True)
+                best_l = int(np.argmax([s[0] for s in sc_b]))
+                if (best_l != 0 and sc_b[best_l][0] > sc_b[0][0] + 0.020
+                        and sc_b[best_l][1] > sc_b[0][1] + 0.005
+                        and sc_b[best_l][2] > sc_b[0][2] + 0.002):
+                    # Verify step `si` itself did not regress noticeably!
+                    sc_si_only = _eval_multiview_score(lib, [eval_pages[0]], [[[legal[0]]], [[legal[best_l]]]], use_dino=False)
+                    if sc_si_only[1][1] >= sc_si_only[0][1] - 0.012:
+                        new_g = list(out.groups[si])
+                        new_g[bi] = legal[best_l]
+                        out.groups[si] = new_g
+                        grp = new_g
+                        asm["parts"] = [e for s2 in asm["step_indices"] for e in out.groups[s2]]
+                        changes += 1
+                        if log:
+                            log({"global_opt": "scanet_stereo_brick", "step": si + 1, "part": p,
+                                 "rot_steps": [f + 1 for f in pick_rot],
+                                 "delta_comb": round(sc_b[best_l][0] - sc_b[0][0], 4)})
+    return changes

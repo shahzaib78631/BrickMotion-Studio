@@ -481,6 +481,7 @@ struct Viewport::Impl {
     options.hybridRt = look.shading == Shading::HybridRT;
     options.screenSpaceGi = look.shading == Shading::ScreenSpaceGI;
     options.pathTraced = look.shading == Shading::PathTraced;
+    options.realtimePathTrace = look.shading == Shading::RealTimePathTraced;
     options.pathMaxSamples = look.pathSamples;
     options.worldGiOcclusion = look.worldGiOcclusion;
     options.lightsFollowCamera = look.lightsFollowCamera;
@@ -1102,7 +1103,8 @@ bool Viewport::drawFrame(void* metalDrawable, bool& submitted) {
   const bmr::Camera view = v.camera(v.renderer->visibleBounds());
   const bmr::FrameStats s = v.renderer->draw(view, v.withLens(paint, view), metalDrawable);
   submitted = s.submitted;
-  const bool converging = paint.pathTraced && s.pathSamples < static_cast<uint32_t>(paint.pathMaxSamples);
+  const bool converging = (paint.pathTraced || paint.realtimePathTrace) &&
+                          s.pathSamples < static_cast<uint32_t>(paint.pathMaxSamples);
   v.dirty = interactive || (held && gesture) || converging || v.playing || s.settling || (!s.submitted && v.width > 0 && v.height > 0);
   return v.dirty || v.placementPending || v.job || v.directorJob;
 }
@@ -1240,11 +1242,14 @@ std::string Viewport::exportMovie(const MovieSettings& settings, const std::stri
         const bmr::FrameOptions frameOptions = v.withLens(v.options, camera);
         auto drawn = v.renderer->draw(camera, frameOptions);
         if (!drawn.submitted) throw std::runtime_error("Metal could not draw a video frame.");
-        if (v.options.pathTraced && drawn.pathSamples == 0)
+        if ((v.options.pathTraced || v.options.realtimePathTrace) && drawn.pathSamples == 0)
           throw std::runtime_error("Path tracing is not available on this Mac. Choose another shading in View → Look.");
         // Path traced: the same frame again until it has its samples (stops if it stops gaining).
-        for (uint32_t before = 0; v.options.pathTraced && drawn.pathSamples > before &&
-                                  drawn.pathSamples < static_cast<uint32_t>(v.options.pathMaxSamples);) {
+        const uint32_t targetSamples = v.options.realtimePathTrace
+                                           ? std::min<uint32_t>(8u, static_cast<uint32_t>(std::max(1, v.options.pathMaxSamples)))
+                                           : static_cast<uint32_t>(v.options.pathMaxSamples);
+        for (uint32_t before = 0; (v.options.pathTraced || v.options.realtimePathTrace) &&
+                                  drawn.pathSamples > before && drawn.pathSamples < targetSamples;) {
           before = drawn.pathSamples;
           drawn = v.renderer->draw(camera, frameOptions);
         }

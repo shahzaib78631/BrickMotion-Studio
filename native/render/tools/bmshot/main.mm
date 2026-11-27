@@ -97,6 +97,7 @@ int main(int argc, char** argv) {
   bmr::FrameOptions options;
   bool stats = false;
   int benchFrames = 0;
+  int rtptFrames = 1;
   std::vector<uint32_t> select;
   for (size_t i = 1; i < args.size(); i++) {
     const int shared = bmtools::parseShotOption(shot, args, i);
@@ -122,6 +123,13 @@ int main(int argc, char** argv) {
       options.pathTraced = true;
       options.pathMaxSamples = std::max(1, std::atoi(value().c_str()));
       options.pathSamplesPerFrame = options.pathMaxSamples;
+    }
+    else if (a == "--rtpt") {
+      options.realtimePathTrace = true;
+    }
+    else if (a == "--rtpt-frames") {
+      options.realtimePathTrace = true;
+      rtptFrames = std::max(1, std::atoi(value().c_str()));
     }
     else if (a == "--maps-whole") options.mapTrianglesPerFrame = UINT64_MAX;  // bench only: every stale map drawn whole
     else if (a == "--detail") {
@@ -235,7 +243,9 @@ int main(int argc, char** argv) {
       std::fprintf(stderr, "bmshot: frame %d of %d\n", frame, timeline.frames);
       if (benchFrames > 0) return bench(*renderer, model, benchFrames, width, height, options, &plan, &timeline, frame);
     }
-    const bmr::FrameStats s = renderer->draw(cameraAt(frame), options);
+    bmr::FrameStats s;
+    const int draws = options.realtimePathTrace ? rtptFrames : 1;
+    for (int d = 0; d < draws; d++) s = renderer->draw(cameraAt(frame), options);
     if (!bmr::writePng(renderer->readback(), out)) {
       std::fprintf(stderr, "bmshot: cannot write %s\n", out.c_str());
       return kFailure;

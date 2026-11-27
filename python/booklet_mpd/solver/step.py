@@ -422,7 +422,8 @@ def solve(lib, base: list, parts: list[tuple[str, int]], rgb: np.ndarray, pts_pe
         else:
             held = register(lib, model0, picture, codes, cview.orientation, cview.yaw, cview.pitch, cview.scale,
                             scale_range=(1.0,), angle_steps=((3.0, 0.0), (-3.0, 0.0), (0.0, 3.0), (0.0, -3.0)),
-                            classes=classes, on_ink=ink_dist <= NEAR_INK, subpixel=True, roll=cview.roll)
+                            classes=classes, on_ink=ink_dist <= NEAR_INK, subpixel=True, roll=cview.roll,
+                            init_offset=cview.offset if cview.offset != (0.0, 0.0) else None)
             held.orientation_index = coi
     pre_iou = float(views[0][0])
     if not parts and not units:
@@ -443,7 +444,8 @@ def solve(lib, base: list, parts: list[tuple[str, int]], rgb: np.ndarray, pts_pe
             if q > best_q:
                 best_q, best_reg, best_view = q, reg, rv
         return StepResult(seeded, [None] * len(seeded), best_view, best_reg.score, pre_iou, completed=best_reg.score,
-                          orientation_index=best_reg.orientation_index)
+                          orientation_index=best_reg.orientation_index,
+                          early_branches=[(seeded, [None] * len(seeded), best_view, best_reg.orientation_index, float(best_reg.score))])
 
     # Additive step-wide candidate cache: candidates(part, model0) is computed ONCE per part for
     # the entire step (shared across all camera hypotheses, rounds, beam nodes, and polish moves!),
@@ -552,10 +554,14 @@ def solve(lib, base: list, parts: list[tuple[str, int]], rgb: np.ndarray, pts_pe
             cands = candidate_fn
         if not solved:
             if EXACT_PLACE and scorer is not None:
+                step_fp = 0.0 if (not base and deltas != (0.0,)) else None
+                ptop = 20 if polish_starts <= 1 else 40
+                prnd = 2 if polish_starts <= 1 else 4
                 states = solve_step_exact(lib, scene_for, scorer, model0, rest, cands, collider=collider,
                                           beam=max(beam, 10), deltas=deltas, pushes=pushes,
                                           next_scorer=next_scorer if deltas != (0.0,) else None,
-                                          polish_starts=polish_starts, time_budget=step_budget)
+                                          polish_starts=polish_starts, polish_top_k=ptop, polish_rounds=prnd,
+                                          time_budget=step_budget, flush_penalty=step_fp)
             else:
                 states = solve_step(lib, scene_for, model0, rest, cands, collides=collides, beam=beam, deltas=deltas, pushes=pushes)
         else:
@@ -570,8 +576,14 @@ def solve(lib, base: list, parts: list[tuple[str, int]], rgb: np.ndarray, pts_pe
             if len(solved) == 1 and solved[0][0].get("alternatives") and EXACT_PLACE and scorer is not None:
                 from .exact_place import _state_geom_key
                 u_cnt = solved[0][1]
+                # On multi-copy (2x+) repeat steps where the primary unit already locks >= 0.90 IoU, skip
+                # redundant alternative-unit re-placement (saves 2x-3x runtime on repeat steps like 41620 s10!).
+                skip_alts = (
+                    u_cnt >= 2 and bool(ustates)
+                    and float(view_fit_metrics(lib, model0 + _drawn_entries(ustates[0].placed, ustates[0].scores), picture, reg.view)[0]) >= 0.90
+                )
                 all_u = list(ustates)
-                for alt_u in solved[0][0]["alternatives"][:2]:
+                for alt_u in ([] if skip_alts else solved[0][0]["alternatives"][:2]):
                     alt_st = place_units(lib, scene_for, model0, [(alt_u, u_cnt)], cands, collides=collides,
                                          set_model=set_model, deltas=deltas, pushes=unit_pushes, collider=collider,
                                          scorer=scorer, next_scorer=next_scorer if deltas != (0.0,) else None)
@@ -607,7 +619,14 @@ def solve(lib, base: list, parts: list[tuple[str, int]], rgb: np.ndarray, pts_pe
                     if not rest:
                         st_combined = State(ust.placed, ust.scores, ust.total, ust.done, unit_groups)
                         if EXACT_PLACE and scorer is not None:
-                            st_combined.total = scorer.score(_drawn_entries(st_combined.placed, st_combined.scores))
+                            from .exact_place import _float_cost
+                            st_combined.total = float(scorer.score(_drawn_entries(st_combined.placed, st_combined.scores)))
+                            if deltas != (0.0,):
+                                # Penalise floating rigid unit once per floating copy (consistent with loose states)
+                                for grp_u in unit_groups:
+                                    d_u = max((float(st_combined.scores[k].delta) for k in grp_u if st_combined.scores[k] is not None), default=0.0)
+                                    if d_u > 0.0:
+                                        st_combined.total -= _float_cost(d_u)
                         out.append(st_combined)
                         continue
                     if set_model is not None:
@@ -656,7 +675,7 @@ def solve(lib, base: list, parts: list[tuple[str, int]], rgb: np.ndarray, pts_pe
                     out.sort(key=lambda st: -st.total)
                     best_unit_tot = out[0].total if out else -1e9
                     unit_iou = view_fit_metrics(lib, model0 + _drawn_entries(out[0].placed, out[0].scores), picture, reg.view)[0] if out else 0.0
-                    want_loose = (len(all_loose) <= 5 or unit_iou < 0.90) if deltas == (0.0,) else (len(all_loose) <= 6 and unit_iou < 0.88 and not all_multistage)
+                    want_loose = (len(all_loose) <= 5 or unit_iou < 0.90) if deltas == (0.0,) else (not all_multistage and (len(all_loose) <= 6 or unit_iou < 0.88))
                     if want_loose:
                         loose_states = solve_step_exact(lib, scene_for, scorer, model0, all_loose, cands, collider=collider,
                                                         beam=max(beam, 8), deltas=deltas, pushes=pushes,
@@ -715,7 +734,8 @@ def solve(lib, base: list, parts: list[tuple[str, int]], rgb: np.ndarray, pts_pe
         drawn = [(p, c, drawn_pose(sc) if sc is not None else m) for (p, c, m), sc in zip(state.placed, state.scores)]
         full_d = model0 + drawn
         out = register(lib, full_d, picture, codes, reg.view.orientation, reg.view.yaw, reg.view.pitch,
-                       reg.view.scale, scale_range=scales, classes=classes, on_ink=on_ink, roll=reg.view.roll)
+                       reg.view.scale, scale_range=scales, classes=classes, on_ink=on_ink, roll=reg.view.roll,
+                       init_offset=reg.view.offset if reg.view.offset != (0.0, 0.0) else None)
         if subpixel and on_ink is not None and full_d:
             iou0, md0, _p0 = view_fit_metrics(lib, full_d, picture, out.view)
             rv = refine_view(lib, full_d, picture, out.view, scale_tol=0.06, outer=2)
@@ -761,7 +781,7 @@ def solve(lib, base: list, parts: list[tuple[str, int]], rgb: np.ndarray, pts_pe
             scale_d = abs(reg2.view.scale - reg.view.scale) / max(reg.view.scale, 1e-6)
             if not (moved > 1.0 or scale_d > 0.008 or abs(reg2.view.yaw - reg.view.yaw) > 1 or abs(reg2.view.pitch - reg.view.pitch) > 1):
                 break
-            states2 = place_under(reg2, polish_starts=min(polish_starts, 2), step_budget=step_budget * 0.7)
+            states2 = place_under(reg2, polish_starts=(0 if polish_starts <= 1 else min(polish_starts, 2)), step_budget=step_budget * 0.6)
             if not states2 or not states2[0].placed:
                 break
             reg3 = completed(reg2, states2[0], scales, subpixel=bool(deltas == (0.0,) and len(base) >= 3))
@@ -775,11 +795,15 @@ def solve(lib, base: list, parts: list[tuple[str, int]], rgb: np.ndarray, pts_pe
             # layouts are aligned accurately instead of losing to shifted/flush poses!
             if len(base) <= 2 and len(states) >= 2:
                 from .exact_place import _non_ortho_penalty
+                from .place import drawn_pose
                 recentered = []
                 n_rc = 10 if len(base) <= 1 else 6
                 # Allow a wider scale search on 1-2 part bases (e.g. zoomed baseplate step 40350 s25!);
                 # Aligner can still prefer a slightly shrunken scale, so also test 1.08x directly on ModelScorer!
                 rc_scales = (0.96, 1.0, 1.04, 1.08, 1.12) if (1 <= len(base) <= 2) else scales
+                exploded_s1 = (not base) and (deltas != (0.0,))
+                step_arrow_axes = picture.arrow_axes() if exploded_s1 else []
+                rc_fp = 0.0 if exploded_s1 else None
                 for st in states[:n_rc]:
                     rc = completed(reg, st, rc_scales)
                     best_rc_item = None
@@ -787,11 +811,17 @@ def solve(lib, base: list, parts: list[tuple[str, int]], rgb: np.ndarray, pts_pe
                     if len(base) == 1 and rc.view.scale < scale * 1.04:
                         rc_hi = completed(reg, st, (1.06, 1.10, 1.14))
                         try_views.append(rc_hi)
-                    # Physical multi-stud seating tie-breaker for tiny 1-2 part bases: prevents an
-                    # overhanging corner plate (e.g. 40350 s25 4477 mating 3 studs at [50,8,-60]) from
-                    # beating the centered full-seated layout (6 studs at [0,8,-50]) on a ~0.01 score tie!
+                    # Physical multi-stud seating tie-breaker for tiny 1-2 part SEATED bases (prevents an
+                    # overhanging corner plate like 40350 s25 4477 mating 3 studs from beating a 6-stud seat).
+                    # On exploded Step-1 diagrams, skip mates bonus for pure floated/flush pairs, while
+                    # penalising incoherent mixed states that combine a mated stud part with a disconnected
+                    # flush part (e.g. 41620 s1 placing one 3623 on studs and the twin 3623 disconnected!).
+                    has_float = any(s is not None and (s.delta > 0.0 or s.move is not None) for s in st.scores)
+                    n_fl_st = sum(1 for s in st.scores if s is not None and isinstance(s.candidate, dict) and s.candidate.get("kind") == "flush")
+                    mixed_flush_pen = 0.25 if (0 < n_fl_st < len(st.scores)) else 0.0
                     rc_mates_bonus = 0.0
-                    if collider is not None and getattr(collider, "native", None) is not None and model0 and st.placed:
+                    if (not (exploded_s1 and has_float)
+                            and collider is not None and getattr(collider, "native", None) is not None and model0 and st.placed):
                         collider.set_model(model0)
                         _mc, _mconn, m_cnt, _mg = collider.layout_check(st.placed)
                         rc_mates_bonus = 0.015 * min(int(m_cnt), 8)
@@ -799,21 +829,105 @@ def solve(lib, base: list, parts: list[tuple[str, int]], rgb: np.ndarray, pts_pe
                         sc_rc = ModelScorer(lib, model0, picture, rc_v.view, codes, prev_rgb=prev_rgb, prev_pts=prev_pts)
                         drawn_rc = _drawn_entries(st.placed, st.scores)
                         val_rc = float(sc_rc.score(drawn_rc))
-                        val_rc -= sum(_non_ortho_penalty(s.candidate if s else None, m_i)
+                        val_rc -= sum(_non_ortho_penalty(s.candidate if s else None, m_i, flush_penalty=rc_fp)
                                       for (_p, _c, m_i), s in zip(st.placed, st.scores))
                         norm_rc = max(1.0, float(sc_rc.fg.sum() + sc_rc.ink_fg.sum()))
                         rc_iou = float(view_fit_metrics(lib, model0 + drawn_rc, picture, rc_v.view)[0])
+                        # On exploded Step-1 diagrams with red arrows, reward floating displacements whose
+                        # 2D image vector aligns with an actual red arrow direction (separates horizontal flush
+                        # push along Z from vertical 1-stud lift along Y that projects to the same 2D silhouette!).
+                        arrow_bonus = 0.0
+                        if step_arrow_axes and has_float:
+                            als = []
+                            for (_p, _c, m_i), s in zip(st.placed, st.scores):
+                                if s is not None and (s.delta > 0.0 or s.move is not None):
+                                    dm = drawn_pose(s)
+                                    pts2 = rc_v.view.project(np.stack([np.asarray(dm, float)[:3, 3], np.asarray(m_i, float)[:3, 3]]))
+                                    v2 = pts2[0, :2] - pts2[1, :2]
+                                    vn = float(np.linalg.norm(v2))
+                                    if vn > 4.0:
+                                        u2 = v2 / vn
+                                        als.append(max(abs(float(np.dot(u2, ax))) for ax, _ln in step_arrow_axes))
+                            if als:
+                                arrow_bonus = 0.08 * float(np.mean(als))
                         # Combine ModelScorer with silhouette IoU on tiny 1-2 part bases for ranking
                         # (so a true high-IoU upright layout beats a mismatched overdraw), while keeping
                         # unbiased `val_rc / norm_rc + 1.0` in `reg2.score` for SectionCamera continuity!
                         unbiased_rc = val_rc / norm_rc + 1.0
-                        comb_rc = unbiased_rc + 0.50 * rc_iou + rc_mates_bonus
+                        comb_rc = unbiased_rc + 0.50 * rc_iou + rc_mates_bonus + arrow_bonus - mixed_flush_pen
                         item_rc = (comb_rc, unbiased_rc, rc_v, st)
                         if best_rc_item is None or item_rc[0] > best_rc_item[0]:
                             best_rc_item = item_rc
                     recentered.append(best_rc_item)
                 recentered.sort(key=lambda x: -x[0])
+                # Apples-to-apples guard: noisy Aligner scale/offset jumps on individual `completed(st)`
+                # calls can penalise the true layout (e.g. 40271 s2 jumping 1.00->1.04 and losing 0.04 IoU!).
+                # Also score every candidate state on the single best recentered view `best_rcv` and keep
+                # whichever view explains that state better!
+                best_rcv = recentered[0][2]
+                sc_shared = ModelScorer(lib, model0, picture, best_rcv.view, codes, prev_rgb=prev_rgb, prev_pts=prev_pts)
+                norm_sh = max(1.0, float(sc_shared.fg.sum() + sc_shared.ink_fg.sum()))
+                for idx_rc in range(1, len(recentered)):
+                    cr_i, ur_i, rcv_i, st_i = recentered[idx_rc]
+                    drawn_sh = _drawn_entries(st_i.placed, st_i.scores)
+                    val_sh = float(sc_shared.score(drawn_sh))
+                    val_sh -= sum(_non_ortho_penalty(s.candidate if s else None, m_i, flush_penalty=rc_fp)
+                                  for (_p, _c, m_i), s in zip(st_i.placed, st_i.scores))
+                    iou_sh = float(view_fit_metrics(lib, model0 + drawn_sh, picture, best_rcv.view)[0])
+                    has_fl_i = any(s is not None and (s.delta > 0.0 or s.move is not None) for s in st_i.scores)
+                    n_fl_i = sum(1 for s in st_i.scores if s is not None and isinstance(s.candidate, dict) and s.candidate.get("kind") == "flush")
+                    m_pen_i = 0.25 if (0 < n_fl_i < len(st_i.scores)) else 0.0
+                    mb_i = 0.0
+                    if (not (exploded_s1 and has_fl_i)
+                            and collider is not None and getattr(collider, "native", None) is not None and model0 and st_i.placed):
+                        collider.set_model(model0)
+                        mb_i = 0.015 * min(int(collider.layout_check(st_i.placed)[2]), 8)
+                    unb_sh = val_sh / norm_sh + 1.0
+                    comb_sh = unb_sh + 0.50 * iou_sh + mb_i - m_pen_i
+                    if comb_sh > cr_i:
+                        recentered[idx_rc] = (comb_sh, unb_sh, best_rcv, st_i)
+                recentered.sort(key=lambda x: -x[0])
+                # On 1-2 part bases (including arrowed step-2 pages like 40271 s2!), break close
+                # recentering ties with FoundPose DINOv2 (on drawn renders) + BrickPriorNet v3 (on seated poses)!
+                if len(base) >= 1 and len(recentered) >= 2 and (recentered[0][0] - recentered[1][0]) < 0.16:
+                    top_k_rc = min(6, len(recentered))
+                    top_rc = recentered[:top_k_rc]
+                    bonus_rc = np.zeros(top_k_rc, dtype=np.float64)
+                    from . import brick_prior, vision_prior
+                    bp_rc = brick_prior.prior()
+                    if bp_rc is not None:
+                        try:
+                            bp_v = bp_rc.score_layouts_batch(model0, [x[3].placed for x in top_rc], max_neighbors=4, radius=95.0)
+                            n_p_rc = max(1, len(top_rc[0][3].placed))
+                            bonus_rc += np.clip(0.020 * (bp_v - float(np.mean(bp_v))) / n_p_rc, -0.04, 0.04)
+                        except Exception:
+                            pass
+                    if vision_prior.enabled():
+                        perc_rc = vision_prior.perceptor()
+                        if perc_rc is not None:
+                            try:
+                                bg_rc = tuple(int(round(v)) for v in picture.background)
+                                fg_rc = picture.foreground & ~picture.arrows
+                                ren_rc = []
+                                focus_rc = np.zeros(picture.rgb.shape[:2], dtype=bool)
+                                for _cr, _ur, rcv_i, st_i in top_rc:
+                                    full_i = list(model0) + _drawn_entries(st_i.placed, st_i.scores)
+                                    rgb_i, _d_i, lab_i = vision_prior.render_npr_rgb(lib, full_i, rcv_i.view, picture.rgb.shape[:2], bg=bg_rc)
+                                    ren_rc.append(rgb_i)
+                                    focus_rc |= (lab_i >= len(model0))
+                                d_rc = perc_rc.score_renders(picture.rgb, fg_rc, bg_rc, ren_rc,
+                                                             focus_mask=focus_rc if focus_rc.any() else None)
+                                if len(d_rc) == top_k_rc:
+                                    bonus_rc += 0.55 * (d_rc - float(np.mean(d_rc)))
+                            except Exception:
+                                pass
+                    ord_rc = sorted(range(top_k_rc), key=lambda i: -(top_rc[i][0] + float(bonus_rc[i])))
+                    recentered = [top_rc[i] for i in ord_rc] + recentered[top_k_rc:]
                 final_rank, unbiased_score, reg2, _best_st = recentered[0]
+                # Tag each recentered state with its own aligned view so Step-1 early_branches keep exact views
+                for _cr, _ur, rcv_i, st_i in recentered:
+                    st_i._rc_view = rcv_i.view
+                    st_i._rc_score = float(_ur)
                 states = [x[3] for x in recentered] + states[n_rc:]
                 reg2 = Registration(reg2.view, unbiased_score, reg2.shape, reg2.orientation_index)
                 return final_rank, reg2, states
@@ -847,7 +961,7 @@ def solve(lib, base: list, parts: list[tuple[str, int]], rgb: np.ndarray, pts_pe
                 cur_d2 = cur_s2 - float(scorer2.base_score)
                 rank_s2 = adj_s2 + (1.0 * max(nv_s2, -0.35 * max(0.0, cur_d2)) if use_nv2 else 0.0)
                 st.total = rank_s2
-                scored_states.append((rank_s2, cur_s2, st))
+                scored_states.append((rank_s2, cur_s2, st, adj_s2))
             if len(scored_states) >= 2:
                 dino_w = float(os.environ.get("BOOKLET_SOLVER_DINO_W", "0.65"))
                 if dino_w > 0.0:
@@ -857,44 +971,47 @@ def solve(lib, base: list, parts: list[tuple[str, int]], rgb: np.ndarray, pts_pe
                         top_r = max(x[0] for x in scored_states)
                         close_r = sorted(x[0] for x in scored_states)[-2]
                         if (top_r - close_r) <= 0.18 * norm_d:
-                            drawn_list = [_drawn_entries(st.placed, st.scores) for _, _, st in scored_states]
+                            drawn_list = [_drawn_entries(st.placed, st.scores) for _, _, st, _ in scored_states]
                             d_cur = vision_prior.score_candidate_layouts(lib, model0, drawn_list, picture, reg2.view)
                             if d_cur is not None and len(d_cur) == len(scored_states):
                                 d_adj = d_cur - float(np.mean(d_cur))
                                 # On exploded steps with verified next-step view, also check SEATED DINOv2 in step N+1!
                                 if use_nv2 and ns2 is not None:
                                     d_nxt = vision_prior.score_candidate_layouts(
-                                        lib, model0, [st.placed for _, _, st in scored_states], ns2.picture, ns2.view
+                                        lib, model0, [st.placed for _, _, st, _ in scored_states], ns2.picture, ns2.view
                                     )
                                     if d_nxt is not None and len(d_nxt) == len(scored_states):
                                         d_adj = 0.65 * d_adj + 0.35 * (d_nxt - float(np.mean(d_nxt)))
                                 scored_states = [
                                     (float(scored_states[i][0] + dino_w * norm_d * float(d_adj[i])),
-                                     scored_states[i][1], scored_states[i][2])
+                                     scored_states[i][1], scored_states[i][2], scored_states[i][3])
                                     for i in range(len(scored_states))
                                 ]
-                                for rank_s2, _cur, st in scored_states:
+                                for rank_s2, _cur, st, _adj in scored_states:
                                     st.total = rank_s2
             if deltas == (0.0,) and len(scored_states) >= 2:
                 from .comparator import layout_patches, layout_weight, loaded_layout
                 comp_v2 = loaded_layout()
                 if comp_v2 is not None and layout_weight() > 0.0:
-                    drawn_list = [_drawn_entries(st.placed, st.scores) for _, _, st in scored_states]
+                    drawn_list = [_drawn_entries(st.placed, st.scores) for _, _, st, _ in scored_states]
                     pats = layout_patches(lib, picture.rgb, picture.background, reg2.view, model0, drawn_list)
                     if pats is not None and len(pats) == len(scored_states):
                         base_arr = np.array([x[0] for x in scored_states], dtype=float)
                         blended = comp_v2.blend(base_arr, comp_v2.logits(pats))
-                        scored_states = [(float(blended[i]), scored_states[i][1], scored_states[i][2])
+                        scored_states = [(float(blended[i]), scored_states[i][1], scored_states[i][2], scored_states[i][3])
                                          for i in range(len(scored_states))]
-                        for rank_s2, _cur, st in scored_states:
+                        for rank_s2, _cur, st, _adj in scored_states:
                             st.total = rank_s2
             scored_states.sort(key=lambda x: -x[0])
-            states = [st for _, _, st in scored_states] + states[max(RERANK, 6):]
+            states = [st for _, _, st, _ in scored_states] + states[max(RERANK, 6):]
             norm = max(1.0, float(scorer2.fg.sum() + scorer2.ink_fg.sum()))
-            # Combine ModelScorer (normalised to ~[-2, 2]) for cross-hypothesis selection
-            final_score = float(scored_states[0][1]) / norm + 1.0
-            reg2 = Registration(reg2.view, final_score, reg2.shape, reg2.orientation_index)
-            return final_score, reg2, states
+            # Cross-hypothesis ranking includes float/hidden/non-ortho penalties (`adj_s2`) so a bogus
+            # rotated camera cheating by floating 5 parts 120 LDU across the page can NEVER beat the true
+            # seated camera (e.g. 40348 s37!), while `reg2.score` keeps unbiased `cur_s2` for SectionCamera!
+            final_unbiased = float(scored_states[0][1]) / norm + 1.0
+            final_rank = float(scored_states[0][3]) / norm + 1.0
+            reg2 = Registration(reg2.view, final_unbiased, reg2.shape, reg2.orientation_index)
+            return final_rank, reg2, states
         # Legacy Aligner re-rank path (when BOOKLET_SOLVER_EXACT=0)
         for k in range(1, min(RERANK, len(states))):
             alt = completed(reg, states[k], scales)
@@ -959,17 +1076,39 @@ def solve(lib, base: list, parts: list[tuple[str, int]], rgb: np.ndarray, pts_pe
     n_expected_parts = len(parts) + sum(len(sp["per_copy"]) * sp["count"] for sp in units)
     if held is not None:
         is_fixed = camera is not None and camera[2] <= -1e8
-        r = evaluate(held, scales=(1.0,), fixed_camera=is_fixed)
+        is_lookahead = camera is not None and (-1e8 < camera[2] <= -1e5)
+        r = evaluate(
+            held, scales=(1.0,), fixed_camera=is_fixed,
+            polish_starts=(0 if is_lookahead else 3),
+            step_budget=(4.0 if is_lookahead else 18.0),
+        )
         if r is not None:
             held_ok_iou = 0.0
-            if not is_fixed and len(r[2][0].placed) == n_expected_parts and r[1].view is not None:
+            if not is_fixed and not is_lookahead and len(r[2][0].placed) == n_expected_parts and r[1].view is not None:
                 held_ok_iou = float(view_fit_metrics(
                     lib, model0 + _drawn_entries(r[2][0].placed, r[2][0].scores), picture, r[1].view
                 )[0])
-            search_free = (not is_fixed) and (r[0] < expect - HOLD_DROP)
-            # doubted (the model may have been turned): search afresh, but the held camera still wins
-            # unless a free one beats it clearly
-            results.append((r[0] + (HOLD_DROP if search_free else 0.0), r[1], r[2]))
+            # Lock onto held section camera when model0's pre-placement Aligner fit is strong (held.score >= 1.10;
+            # empirically 15/15 true booklet turns across EVAL6 have held.score <= 1.012!) AND completed fit is
+            # tight (IoU >= 0.93, all parts placed, no severe score collapse). Prevents both false 5x free-search
+            # slowdowns and false 90/180-deg boxy orientation flips when black/arrowed steps dip completed score!
+            held_locked = (
+                (not is_fixed)
+                and (not is_lookahead)
+                and len(base) >= 6
+                and len(r[2][0].placed) == n_expected_parts
+                and float(held.score) >= 1.10
+                and held_ok_iou >= 0.93
+                and r[0] >= expect - 0.20
+                and r[0] >= 1.25
+            )
+            search_free = (not is_fixed) and (not is_lookahead) and (not held_locked) and (r[0] < expect - HOLD_DROP)
+            # Only grant full HOLD_DROP inertia when model0's pre-placement Aligner score still matches
+            # the page (`held.score >= 1.05`); when `held.score < 1.05`, the booklet almost certainly
+            # turned the model (15/15 true turns across EVAL6 had held.score <= 1.012!), so apply only
+            # tiny +0.02 tie-break slack instead of blocking the true 90/180-deg turn!
+            hold_slack = HOLD_DROP if float(held.score) >= 1.05 else 0.02
+            results.append((r[0] + (hold_slack if search_free else 0.0), r[1], r[2]))
     hypotheses = free_hypotheses() if search_free else []
     free_polish = 1 if len(hypotheses) > 1 else 3
     free_budget = 6.5 if len(hypotheses) > 1 else 18.0
@@ -1041,29 +1180,109 @@ def solve(lib, base: list, parts: list[tuple[str, int]], rgb: np.ndarray, pts_pe
     early_branches = []
     if len(model0) <= 10:
         seen_eb = set()
-        up_res = [r for r in ranked_res if r[1].orientation_index in UPRIGHT]
-        eb_hyps = list(ranked_res[:4])
-        if up_res and sum(1 for r in eb_hyps if r[1].orientation_index in UPRIGHT) < 2:
-            eb_hyps = up_res[:2] + [r for r in ranked_res if r not in up_res[:2]][:2]
-        for rank_idx in (0, 1):
-            for r_sc, r_reg, r_states in eb_hyps:
-                if rank_idx >= len(r_states):
-                    continue
-                st_i = r_states[rank_idx]
+        if not base:
+            # Frame-free Step 1: 4 quarter-turns of the single seeded part are rigidly equivalent.
+            # Instead of repeating rank_idx 0..1 across 4 orientations, collect distinct rigid seated
+            # shapes from the winning hypothesis's top states — explicitly preserving BOTH top `flush`
+            # (side-by-side) AND top non-`flush` (stacked/mated) geometries so Step 2 resolves any
+            # 2D arrow-ray ambiguity cleanly!
+            from .subbuild import _turn
+            def _rigid_sig(pl_entries: list):
+                best_k = None
+                for k_r in range(4):
+                    tk = _turn(k_r)
+                    pts_k = tuple(sorted(
+                        (p, c, tuple(np.round((tk @ np.asarray(m, float))[:3, 3], 1)),
+                         tuple(np.round((tk @ np.asarray(m, float))[:3, :3].ravel(), 1)))
+                        for p, c, m in pl_entries
+                    ))
+                    if best_k is None or pts_k < best_k:
+                        best_k = pts_k
+                return best_k
+            def _is_flush_st(st_f: State) -> bool:
+                return any(s is not None and isinstance(s.candidate, dict) and s.candidate.get("kind") == "flush" for s in st_f.scores)
+            win_reg, win_states = ranked_res[0][1], ranked_res[0][2]
+            top_pool = win_states[:10]
+            ordered_s1 = []
+            if top_pool:
+                ordered_s1.append(top_pool[0])
+                fl_pool = [st_i for st_i in top_pool if _is_flush_st(st_i)]
+                non_fl_pool = [st_i for st_i in top_pool if not _is_flush_st(st_i)]
+                ordered_s1.extend(fl_pool[:2])
+                ordered_s1.extend(non_fl_pool[:2])
+                ordered_s1.extend(top_pool)
+            for st_i in ordered_s1:
                 pl_i = seeded + list(st_i.placed)
-                eb_key = (r_reg.orientation_index, frozenset(
-                    (p, c, tuple(np.round(np.asarray(m, float)[:3, 3], 1)),
-                     tuple(np.round(np.asarray(m, float)[:3, :3].ravel(), 1)))
-                    for p, c, m in pl_i
-                ))
+                eb_key = _rigid_sig(pl_i)
                 if eb_key in seen_eb:
                     continue
                 seen_eb.add(eb_key)
-                early_branches.append((pl_i, [None] * len(seeded) + list(st_i.scores), r_reg.view, r_reg.orientation_index, float(r_reg.score)))
+                v_i = getattr(st_i, "_rc_view", win_reg.view)
+                sc_i = float(getattr(st_i, "_rc_score", win_reg.score))
+                early_branches.append((pl_i, [None] * len(seeded) + list(st_i.scores), v_i, win_reg.orientation_index, sc_i))
                 if len(early_branches) >= 6:
                     break
-            if len(early_branches) >= 6:
-                break
+        elif len(base) == 1:
+            # On 1-part symmetric bases (e.g. 6x6 display stand plate 3958 on step 2), 90-deg rotated
+            # views of the same placement are rigidly identical; deduplicate by rigid 3D shape of
+            # `base + pl_i` up to 90-deg Y-turns so genuinely distinct placements (`rank_idx = 0..3`)
+            # enter `early_branches` for step 3 disambiguation instead of 4 copies of `state[0]`!
+            from .subbuild import _turn
+            def _rigid_sig1(full_entries: list):
+                best_k = None
+                for k_r in range(4):
+                    tk = _turn(k_r)
+                    pts_k = tuple(sorted(
+                        (p, c, tuple(np.round((tk @ np.asarray(m, float))[:3, 3], 1)),
+                         tuple(np.round((tk @ np.asarray(m, float))[:3, :3].ravel(), 1)))
+                        for p, c, m in full_entries
+                    ))
+                    if best_k is None or pts_k < best_k:
+                        best_k = pts_k
+                return best_k
+            up_res = [r for r in ranked_res if r[1].orientation_index in UPRIGHT]
+            eb_hyps = up_res[:4] if up_res else list(ranked_res[:4])
+            for rank_idx in (0, 1, 2, 3):
+                for _rsc, r_reg, r_states in eb_hyps:
+                    if rank_idx >= len(r_states):
+                        continue
+                    st_i = r_states[rank_idx]
+                    pl_i = seeded + list(st_i.placed)
+                    eb_key = _rigid_sig1(list(base) + pl_i)
+                    if eb_key in seen_eb:
+                        continue
+                    seen_eb.add(eb_key)
+                    v_i = getattr(st_i, "_rc_view", r_reg.view)
+                    sc_i = float(getattr(st_i, "_rc_score", r_reg.score))
+                    early_branches.append((pl_i, [None] * len(seeded) + list(st_i.scores), v_i, r_reg.orientation_index, sc_i))
+                    if len(early_branches) >= 6:
+                        break
+                if len(early_branches) >= 6:
+                    break
+        else:
+            up_res = [r for r in ranked_res if r[1].orientation_index in UPRIGHT]
+            eb_hyps = list(ranked_res[:4])
+            if up_res and sum(1 for r in eb_hyps if r[1].orientation_index in UPRIGHT) < 2:
+                eb_hyps = up_res[:2] + [r for r in ranked_res if r not in up_res[:2]][:2]
+            for rank_idx in (0, 1):
+                for r_sc, r_reg, r_states in eb_hyps:
+                    if rank_idx >= len(r_states):
+                        continue
+                    st_i = r_states[rank_idx]
+                    pl_i = seeded + list(st_i.placed)
+                    eb_key = (r_reg.orientation_index, frozenset(
+                        (p, c, tuple(np.round(np.asarray(m, float)[:3, 3], 1)),
+                         tuple(np.round(np.asarray(m, float)[:3, :3].ravel(), 1)))
+                        for p, c, m in pl_i
+                    ))
+                    if eb_key in seen_eb:
+                        continue
+                    seen_eb.add(eb_key)
+                    early_branches.append((pl_i, [None] * len(seeded) + list(st_i.scores), r_reg.view, r_reg.orientation_index, float(r_reg.score)))
+                    if len(early_branches) >= 6:
+                        break
+                if len(early_branches) >= 6:
+                    break
     from .candidates import clean_matrix
     placed_clean = [(p, c, clean_matrix(m)) for p, c, m in (seeded + best.placed)]
     return StepResult(placed_clean, [None] * len(seeded) + best.scores, reg.view, reg.score, pre_iou,

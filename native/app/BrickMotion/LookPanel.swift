@@ -5,7 +5,7 @@ import BMApp
 import SwiftUI
 
 extension bmapp.Shading: @retroactive CaseIterable {
-  public static var allCases: [bmapp.Shading] { [.Standard, .Studio, .Neural, .HybridRT, .ScreenSpaceGI, .PathTraced] }
+  public static var allCases: [bmapp.Shading] { [.Standard, .Studio, .Neural, .HybridRT, .ScreenSpaceGI, .PathTraced, .RealTimePathTraced] }
 
   var title: String {
     switch self {
@@ -15,6 +15,7 @@ extension bmapp.Shading: @retroactive CaseIterable {
     case .HybridRT: "Hybrid Ray Tracing"
     case .ScreenSpaceGI: "Screen-Space Bounce"
     case .PathTraced: "Path Traced"
+    case .RealTimePathTraced: "Live Path Traced"
     @unknown default: "Standard"
     }
   }
@@ -27,6 +28,7 @@ extension bmapp.Shading: @retroactive CaseIterable {
     case .HybridRT: "Hardware ray-traced glass and reflections over raster"
     case .ScreenSpaceGI: "Coloured bounce light and glossy reflections"
     case .PathTraced: "Final-render quality, refined while the view is still"
+    case .RealTimePathTraced: "Real-time ReSTIR + SHaRC path tracing with SVGF denoising, always live"
     @unknown default: ""
     }
   }
@@ -39,6 +41,7 @@ extension bmapp.Shading: @retroactive CaseIterable {
     case .HybridRT: "rays"
     case .ScreenSpaceGI: "sun.haze"
     case .PathTraced: "camera.aperture"
+    case .RealTimePathTraced: "sparkles"
     @unknown default: "cube"
     }
   }
@@ -143,7 +146,7 @@ struct LookPanel: View {
       }
       .accessibilityElement(children: .contain)
       .accessibilityLabel("Shading")
-      if look.shading == .PathTraced {
+      if look.shading == .PathTraced || look.shading == .RealTimePathTraced {
         Stepper(value: editor.binding(\.pathSamples), in: 8...1024, step: look.pathSamples >= 256 ? 64 : 8) {
           LabeledContent("Samples", value: "\(look.pathSamples)").monospacedDigit()
         }

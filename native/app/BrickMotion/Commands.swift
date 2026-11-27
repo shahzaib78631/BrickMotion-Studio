@@ -481,6 +481,7 @@ private let down = String(UnicodeScalar(NSDownArrowFunctionKey)!)
                 }),
     look("view.shading.standard", .Standard), look("view.shading.studio", .Studio), look("view.shading.neural", .Neural),
     look("view.shading.hybrid", .HybridRT), look("view.shading.ssgi", .ScreenSpaceGI), look("view.shading.path", .PathTraced),
+    look("view.shading.rtpt", .RealTimePathTraced),
     lookToggle("view.edgeLines", "Edge Lines", symbol: "square.dashed", \.edges),
     lookToggle("view.shadows", "Shadows", symbol: "shadow", \.shadows),
     lookToggle("view.ambientOcclusion", "Ambient Occlusion", symbol: "circle.lefthalf.filled", \.ambientOcclusion),

@@ -23,9 +23,12 @@ PKG_DIR = Path(__file__).resolve().parent
 
 CODE_FILES = [
     "__init__.py",
+    "__main__.py",
     "blueprint.py",
     "blueprint_model.py",
+    "cli.py",
     "clip_encoder.py",
+    "dpo.py",
     "geometry.py",
     "model.py",
     "train.py",
@@ -65,8 +68,8 @@ Trains the full **BrickGen v3** 2-stage architecture on **BrickNet + OMR + MOC +
 *Attribution: BrickNet (Kulits & Schmid, CVPR 2026), LDraw OMR (CC BY 2.0/4.0), and StableText2Brick (MIT).*
 """
 
-    settings = """# === BrickGen v3 Two-Stage Training Configuration ===
-RUN_STAGE1 = True           # Stage 1: BlueprintFlow3D (Text -> 16x16x16x5 colored 3D silhouette)
+    settings = """# === BrickGen v3.5 Two-Stage + Offline DPO Training Configuration ===
+RUN_STAGE1 = True           # Stage 1: Unbiased BlueprintFlow3D (w=1.0, zero prior tilt -> razor-sharp 16^3x5 blueprints!)
 BP_PRESET = "base"          # 27M params 3D DiT (fast, crisp global silhouettes)
 BP_STEPS = 15000            # ~10-12 min on A100 bf16
 BP_LR = 3e-4
@@ -77,7 +80,13 @@ BRICK_STEPS = 24000         # ~45 min on A100 bf16 (full cosine LR decay)
 BRICK_LR = 3e-4
 EVAL_EVERY = 1000
 
-RUN_NAME = "run_v3"
+RUN_DPO = False             # Stage 3 (Optional): Offline Reward-Guided DPO if dpo_pairs.npz is in MyDrive/brickgen/
+DPO_PAIRS = "/content/drive/MyDrive/brickgen/dpo_pairs.npz"
+DPO_STEPS = 400
+DPO_LR = 2e-5
+DPO_BETA = 0.15
+
+RUN_NAME = "run_v3_5"
 USE_GOOGLE_DRIVE = True
 DRIVE_DIR = "/content/drive/MyDrive/brickgen"
 BUNDLE_ZIP = "/content/drive/MyDrive/brickgen/brickgen-v3-colab-bundle.zip"
@@ -225,6 +234,32 @@ if RUN_STAGE2:
             print(f"Copied {dst_fn} ({sp.stat().st_size / 1e6:.1f} MB) -> {RUN_DIR / dst_fn}")
 """
 
+    run_dpo = """# === STAGE 3 (Optional): Offline Reward-Guided DPO Post-Training (BrickAnything Recipe) ===
+if RUN_DPO:
+    base_pt = RUN_DIR / "brickgen_v3.pt"
+    if not base_pt.exists():
+        base_pt = Path(DRIVE_DIR) / "brickgen_v3.pt"
+    if not Path(DPO_PAIRS).exists():
+        raise FileNotFoundError(f"Collect dpo_pairs.npz locally with `python -m brickgen collect-dpo` and upload to {DPO_PAIRS}")
+    cmd = [
+        sys.executable, "-m", "brickgen",
+        "train-dpo",
+        "--base-ckpt", str(base_pt),
+        "--pairs", str(DPO_PAIRS),
+        "--out", str(RUN_DIR / "brickgen_v3_dpo.pt"),
+        "--steps", str(DPO_STEPS),
+        "--batch", "16",
+        "--lr", str(DPO_LR),
+        "--beta", str(DPO_BETA),
+    ]
+    print("Running Stage 3 DPO:", " ".join(cmd), flush=True)
+    p = subprocess.Popen(cmd, cwd=CODE_DIR, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+    for line in p.stdout:
+        print(line, end="", flush=True)
+    if p.wait() != 0:
+        raise RuntimeError("Stage-3 DPO failed!")
+"""
+
     inspect_out = """import json
 from pathlib import Path
 
@@ -244,7 +279,7 @@ for name, hp in [("Stage-1 BlueprintFlow3D", STAGE1_DIR / "bp_history.json"), ("
             print(f"  Best step {best['step']}:", json.dumps(best["val"]))
 
 print("\\nReady to download from", RUN_DIR)
-for fn in ["blueprint.pt", "brickgen_v3.pt", "brickgen_v3_best_ce.pt"]:
+for fn in ["blueprint.pt", "brickgen_v3.pt", "brickgen_v3_best_ce.pt", "brickgen_v3_dpo.pt"]:
     p = RUN_DIR / fn
     if p.exists():
         print(f"  - {p.name} ({p.stat().st_size / 1e6:.1f} MB)")
@@ -267,6 +302,7 @@ for fn in ["blueprint.pt", "brickgen_v3.pt", "brickgen_v3_best_ce.pt"]:
             _cell(run_s1),
             _cell(preview_s1),
             _cell(run_s2),
+            _cell(run_dpo),
             _cell(inspect_out),
         ],
     }

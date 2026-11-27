@@ -39,11 +39,19 @@ pub enum Shading {
     HybridRt,
     ScreenSpaceGi,
     PathTraced,
+    RealTimePathTraced,
 }
 
 impl Shading {
-    pub const ALL: [Shading; 6] =
-        [Self::Standard, Self::Studio, Self::Neural, Self::HybridRt, Self::ScreenSpaceGi, Self::PathTraced];
+    pub const ALL: [Shading; 7] = [
+        Self::Standard,
+        Self::Studio,
+        Self::Neural,
+        Self::HybridRt,
+        Self::ScreenSpaceGi,
+        Self::PathTraced,
+        Self::RealTimePathTraced,
+    ];
     fn from_raw(v: i32) -> Self {
         Self::ALL.get(v as usize).copied().unwrap_or_default()
     }

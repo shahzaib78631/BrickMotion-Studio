@@ -1809,9 +1809,9 @@ const ScenePresets kScenes = [] {
 
 template <class E, size_t N>
 using Names = std::array<std::pair<E, const char*>, N>;
-constexpr Names<Shading, 6> kShadingNames{{{Shading::Standard, "standard"}, {Shading::Studio, "studio"},
+constexpr Names<Shading, 7> kShadingNames{{{Shading::Standard, "standard"}, {Shading::Studio, "studio"},
     {Shading::Neural, "neural"}, {Shading::HybridRT, "hybrid-rt"}, {Shading::ScreenSpaceGI, "ssgi"},
-    {Shading::PathTraced, "path-traced"}}};
+    {Shading::PathTraced, "path-traced"}, {Shading::RealTimePathTraced, "realtime-path-traced"}}};
 constexpr Names<BuildOrder, 2> kOrderNames{{{BuildOrder::TakeApart, "take-apart"}, {BuildOrder::BottomUp, "bottom-up"}}};
 constexpr Names<FlightShape, 3> kFlightNames{{{FlightShape::Automatic, "auto"}, {FlightShape::Web, "web"}, {FlightShape::Arc, "arc"}}};
 

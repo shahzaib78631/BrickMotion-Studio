@@ -207,7 +207,13 @@ pub fn of(ctx: &Context) -> Theme {
 
 pub fn apply(ctx: &Context, t: &Theme) {
     ctx.data_mut(|d| d.insert_temp(egui::Id::NULL.with("bm-theme"), *t));
-    ctx.set_fonts(fonts());
+    // Installing fonts rebuilds the glyph atlas; do it once per context so switching themes never flashes.
+    let fonts_key = egui::Id::NULL.with("bm-fonts-installed");
+    let installed = ctx.data(|d| d.get_temp::<bool>(fonts_key).unwrap_or(false));
+    if !installed {
+        ctx.set_fonts(fonts());
+        ctx.data_mut(|d| d.insert_temp(fonts_key, true));
+    }
     let mode = if t.dark { egui::Theme::Dark } else { egui::Theme::Light };
     ctx.set_theme(mode);
     let r = CornerRadius::same(t.radius as u8);
