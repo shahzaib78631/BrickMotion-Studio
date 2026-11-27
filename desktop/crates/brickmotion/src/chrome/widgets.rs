@@ -229,14 +229,12 @@ pub fn popup_row(
             .id(popup_id)
             .gap(4.0)
             .show(|ui| {
-                ui.set_min_width(180.0);
+                // The app's own menu rows: full width, a checkmark on the current one.
+                super::menu::prepare(ui);
                 for (i, &opt) in options.iter().enumerate() {
-                    if ui.selectable_label(*selected == i, opt).clicked() {
-                        if *selected != i {
-                            *selected = i;
-                            changed = true;
-                        }
-                        ui.close();
+                    if super::menu::item_check(ui, t, opt, *selected == i, true) && *selected != i {
+                        *selected = i;
+                        changed = true;
                     }
                 }
             });
