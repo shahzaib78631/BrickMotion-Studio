@@ -53,6 +53,11 @@ fn col(m: &bm::Mat3, c: usize) -> [f64; 3] {
     [m.m[c], m.m[3 + c], m.m[6 + c]]
 }
 
+fn det(r: &bm::Mat3) -> f64 {
+    let m = &r.m;
+    m[0] * (m[4] * m[8] - m[5] * m[7]) - m[1] * (m[3] * m[8] - m[5] * m[6]) + m[2] * (m[3] * m[7] - m[4] * m[6])
+}
+
 fn split(p: bm::Pose) -> Split {
     let mut scale = [1.0; 3];
     let mut r = p.rotation;
@@ -67,9 +72,7 @@ fn split(p: bm::Pose) -> Split {
         }
     }
     // A mirrored piece (det < 0): keep the reflection out of the angles by flipping X back.
-    let m = &r.m;
-    let det = m[0] * (m[4] * m[8] - m[5] * m[7]) - m[1] * (m[3] * m[8] - m[5] * m[6]) + m[2] * (m[3] * m[7] - m[4] * m[6]);
-    if det < 0.0 {
+    if det(&r) < 0.0 {
         for row in 0..3 {
             r.m[row * 3] = -r.m[row * 3];
         }
@@ -122,38 +125,6 @@ fn euler_axis(k: usize, e: [f64; 3]) -> bm::Vec3 {
             mul_v(&rot(1, e[1]), [rx.x, rx.y, rx.z])
         }
     }
-}
-
-/// Axis and degrees of the rotation `r` (orthonormal, row-major); `None` for no turn.
-fn axis_angle(r: &bm::Mat3) -> Option<(bm::Vec3, f64)> {
-    let m = &r.m;
-    let cos = ((m[0] + m[4] + m[8] - 1.0) / 2.0).clamp(-1.0, 1.0);
-    let angle = cos.acos();
-    if angle < 1e-9 {
-        return None;
-    }
-    let sin = angle.sin();
-    let axis = if sin > 1e-6 {
-        bm::Vec3::new(m[7] - m[5], m[2] - m[6], m[3] - m[1]).scale(1.0 / (2.0 * sin))
-    } else {
-        // A half turn: the axis is the column of R + I with the most length.
-        let x = ((m[0] + 1.0) / 2.0).max(0.0).sqrt();
-        let y = ((m[4] + 1.0) / 2.0).max(0.0).sqrt();
-        let z = ((m[8] + 1.0) / 2.0).max(0.0).sqrt();
-        if x >= y && x >= z {
-            bm::Vec3::new(x, m[1] / (2.0 * x), m[2] / (2.0 * x))
-        } else if y >= z {
-            bm::Vec3::new(m[1] / (2.0 * y), y, m[5] / (2.0 * y))
-        } else {
-            bm::Vec3::new(m[2] / (2.0 * z), m[5] / (2.0 * z), z)
-        }
-    };
-    Some((axis, angle.to_degrees()))
-}
-
-fn transpose(r: &bm::Mat3) -> bm::Mat3 {
-    let m = &r.m;
-    bm::Mat3 { m: [m[0], m[3], m[6], m[1], m[4], m[7], m[2], m[5], m[8]] }
 }
 
 fn agree(values: impl Iterator<Item = f64>) -> Option<f64> {
@@ -249,25 +220,29 @@ pub fn can_reset(s: &bm::Session, pieces: &[u32]) -> bool {
     })
 }
 
-/// Puts each selected piece back to no turn and no stretch, about its own origin.
+/// Puts each selected piece back to no turn and no stretch, about its own origin, as one undo
+/// step ("Reset Transform"). A mirrored piece stays mirrored.
 pub fn reset(app: &mut BrickMotionApp) {
-    let sel = app.doc.session().selection();
     app.transform_gesture = None;
-    for p in sel {
-        let s = app.doc.session();
-        let pose = s.pose_of(p);
-        let k = split(pose);
-        if k.scale.iter().any(|v| (v - 1.0).abs() > 1e-6) {
-            let f = bm::Vec3::new(1.0 / k.scale[0], 1.0 / k.scale[1], 1.0 / k.scale[2]);
-            let c = s.scale(&[p], f, k.rotation, pose.position, false);
-            app.edited(c);
-        }
-        let s = app.doc.session();
-        if let Some((axis, deg)) = axis_angle(&transpose(&k.rotation)) {
-            let c = s.rotate(&[p], axis, deg, s.pose_of(p).position, false);
-            app.edited(c);
-        }
+    let s = app.doc.session();
+    let moves: Vec<(u32, bm::Pose)> = s
+        .selection()
+        .into_iter()
+        .filter(|&p| can_reset(s, &[p]))
+        .map(|p| {
+            let pose = s.pose_of(p);
+            let mut rotation = bm::Mat3::default();
+            if det(&pose.rotation) < 0.0 {
+                rotation.m[0] = -1.0;
+            }
+            (p, bm::Pose { rotation, position: pose.position })
+        })
+        .collect();
+    if moves.is_empty() {
+        return;
     }
+    let c = s.reset_poses(&moves, s.generation(), s.version());
+    app.edited(c);
 }
 
 /// "4", "1.25", "−3": up to two places, a true minus sign.

@@ -144,6 +144,8 @@ Changed activateSceneCameraCommand(Session::Impl& s, const std::string& id);
 SnapMix snapMixOf(const Session::Impl& s);
 Changed setSnapMixCommand(Session::Impl& s, const SnapMix& mix);
 Changed seatPiecesCommand(Session::Impl& s, const std::vector<std::pair<uint32_t, bm::Xform>>& poses);
+/// Sets pieces at these world poses as one undo step named "Reset Transform" / "Reset N Transforms".
+Changed resetPosesCommand(Session::Impl& s, const std::vector<std::pair<uint32_t, bm::Xform>>& poses);
 const ScenePresets& scenePresets();
 const ScenePreset* scenePreset(const std::string& id);
 RenderLook renderLookOf(const Session::Impl& s);

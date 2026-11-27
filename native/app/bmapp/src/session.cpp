@@ -399,6 +399,13 @@ Changed Session::seatPieces(const PieceMoves& moves, uint64_t generation, uint64
   for (const auto& move : moves) poses.emplace_back(move.piece, engine(move.pose));
   BM_EDIT(seatPiecesCommand(*impl_, poses));
 }
+Changed Session::resetPoses(const PieceMoves& moves, uint64_t generation, uint64_t version) {
+  if (!impl_->model || impl_->generation != generation || impl_->version != version)
+    return refusal(*impl_, "The model changed. Try again.");
+  std::vector<std::pair<uint32_t, bm::Xform>> poses;
+  for (const auto& move : moves) poses.emplace_back(move.piece, engine(move.pose));
+  BM_EDIT(resetPosesCommand(*impl_, poses));
+}
 Changed Session::setGroup(const PieceList& pieces, const std::string& group) {
   BM_EDIT(setGroupCommand(*impl_, pieces, group));
 }

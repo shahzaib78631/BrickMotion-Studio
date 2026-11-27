@@ -189,16 +189,24 @@ fn a_mirrored_piece_reads_as_unturned_and_unscaled() {
     transform::reset(h.state_mut());
     let r = transform::readout(h.state().session(), &[0]);
     assert!(r.rotation.iter().all(|&a| near(a, 0.0)), "{r:?}");
+    assert!(h.state().session().pose_of(0).rotation.m[0] < 0.0, "reset keeps the mirror");
 }
 
 #[test]
-fn reset_costs_one_undo_step_per_kind_of_change() {
+fn reset_is_one_named_undo_step_for_every_piece_and_change() {
     let mut h = row_of_three();
-    select(&h, &[1]);
+    select(&h, &[0, 1]);
     transform::set(h.state_mut(), Field::Rotation(1), 90.0);
+    transform::set(h.state_mut(), Field::Scale(0), 1.5);
     let depth = h.state().session().undo_depth();
     transform::reset(h.state_mut());
-    assert_eq!(h.state().session().undo_depth(), depth + 1, "a turned piece resets in one step");
+    assert_eq!(h.state().session().undo_depth(), depth + 1, "turned and stretched pieces reset in one step");
+    assert_eq!(h.state().session().undo_name(), "Reset 2 Transforms");
+    assert!(!transform::can_reset(h.state().session(), &[0, 1]));
+    select(&h, &[1]);
+    transform::set(h.state_mut(), Field::Rotation(1), 45.0);
+    transform::reset(h.state_mut());
+    assert_eq!(h.state().session().undo_name(), "Reset Transform");
 }
 
 #[test]

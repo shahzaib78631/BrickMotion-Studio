@@ -746,7 +746,9 @@ Changed placeMovedCommand(Session::Impl& s, const PieceList& pieces, uint32_t an
   return transformCommand(s, Edit::Move, "Move", anchorFirst(pieces, anchor), delta, false, {}, {}, 0, {});
 }
 
-Changed seatPiecesCommand(Session::Impl& s, const std::vector<std::pair<uint32_t, Xform>>& poses) {
+namespace {
+Changed setPosesCommand(Session::Impl& s, const std::vector<std::pair<uint32_t, Xform>>& poses,
+                        const std::string& one, const std::string& many) {
   std::vector<std::pair<Target, Xform>> work;
   std::set<ItemId> seen;
   PieceList pieces;
@@ -760,7 +762,8 @@ Changed seatPiecesCommand(Session::Impl& s, const std::vector<std::pair<uint32_t
   if (work.empty()) return unchanged(s);
   Command c;
   c.kind = Edit::Move;
-  c.name = work.size() == 1 ? "Seat Loose Piece" : "Seat " + std::to_string(work.size()) + " Loose Pieces";
+  c.name = work.size() == 1 ? one : many;
+  if (const auto n = c.name.find("{n}"); n != std::string::npos) c.name.replace(n, 3, std::to_string(work.size()));
   c.pieces = pieces;
   std::set<std::string> defs;
   for (const auto& [target, delta] : work) defs.insert(target.loc.def);
@@ -776,6 +779,15 @@ Changed seatPiecesCommand(Session::Impl& s, const std::vector<std::pair<uint32_t
     c.items.push_back(std::move(e));
   }
   return push(s, std::move(c));
+}
+}  // namespace
+
+Changed seatPiecesCommand(Session::Impl& s, const std::vector<std::pair<uint32_t, Xform>>& poses) {
+  return setPosesCommand(s, poses, "Seat Loose Piece", "Seat {n} Loose Pieces");
+}
+
+Changed resetPosesCommand(Session::Impl& s, const std::vector<std::pair<uint32_t, Xform>>& poses) {
+  return setPosesCommand(s, poses, "Reset Transform", "Reset {n} Transforms");
 }
 
 std::string groupOf(const Item& item) {

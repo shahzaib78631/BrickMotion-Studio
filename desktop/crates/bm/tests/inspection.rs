@@ -130,3 +130,17 @@ fn fit_together_seats_one_brick_on_another() {
     assert!(!fits.is_empty());
     assert!((fits[0].position.y.abs() - 24.0).abs() < 1e-6, "{:?}", fits[0]);
 }
+
+#[test]
+fn reset_poses_is_one_named_undo_step() {
+    let s = blank();
+    place(&s, "3001.dat", 4, Vec3::new(0.0, 0.0, 0.0));
+    assert_eq!(s.rotate(&[0], Vec3::new(0.0, 1.0, 0.0), 90.0, Vec3::new(0.0, 0.0, 0.0), false).refused, None);
+    let turned = s.pose_of(0);
+    let plain = Pose { rotation: Mat3::default(), position: turned.position };
+    let (generation, version) = (s.generation(), s.version());
+    assert!(s.reset_poses(&[(0, plain)], generation, version + 1).refused.is_some());
+    assert_eq!(s.reset_poses(&[(0, plain)], generation, version).refused, None);
+    assert_eq!(s.undo_name(), "Reset Transform");
+    assert!((s.pose_of(0).rotation.m[0] - 1.0).abs() < 1e-9);
+}

@@ -172,19 +172,25 @@ size_t bm_inspection_fits(BmInspection* i, uint32_t moving, uint32_t target, BmP
   });
 }
 
+static bmapp::PieceMoves pieceMoves(const BmPieceMove* moves, size_t n) {
+  bmapp::PieceMoves out;
+  out.reserve(moves ? n : 0);
+  for (size_t k = 0; moves && k < n; ++k) {
+    bmapp::PieceMove m;
+    m.piece = moves[k].piece;
+    m.pose.rotation = to_mat3(moves[k].rotation);
+    m.pose.position = to_vec3(moves[k].position);
+    out.push_back(m);
+  }
+  return out;
+}
+
 BmChange bm_session_seat_pieces(BmSession* s, const BmPieceMove* moves, size_t n, uint64_t generation, uint64_t version) {
-  return change(s, [&] {
-    bmapp::PieceMoves out;
-    out.reserve(moves ? n : 0);
-    for (size_t k = 0; moves && k < n; ++k) {
-      bmapp::PieceMove m;
-      m.piece = moves[k].piece;
-      m.pose.rotation = to_mat3(moves[k].rotation);
-      m.pose.position = to_vec3(moves[k].position);
-      out.push_back(m);
-    }
-    return s->s->seatPieces(out, generation, version);
-  });
+  return change(s, [&] { return s->s->seatPieces(pieceMoves(moves, n), generation, version); });
+}
+
+BmChange bm_session_reset_poses(BmSession* s, const BmPieceMove* moves, size_t n, uint64_t generation, uint64_t version) {
+  return change(s, [&] { return s->s->resetPoses(pieceMoves(moves, n), generation, version); });
 }
 
 struct BmJointInfoHandle {

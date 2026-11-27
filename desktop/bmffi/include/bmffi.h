@@ -966,6 +966,9 @@ BMFFI_API size_t bm_inspection_fits(BmInspection* i, uint32_t moving, uint32_t t
 
 BMFFI_API BmChange bm_session_seat_pieces(BmSession* s, const BmPieceMove* moves, size_t n, uint64_t generation,
                                           uint64_t version);
+// Sets pieces at these world poses as one undo step named "Reset Transform"; refuses a stale revision.
+BMFFI_API BmChange bm_session_reset_poses(BmSession* s, const BmPieceMove* moves, size_t n, uint64_t generation,
+                                          uint64_t version);
 
 // ---- Submodel focus and extended joint kinematics ----
 typedef struct BmJointInfoHandle BmJointInfoHandle;

@@ -104,17 +104,24 @@ impl Session {
 
     /// Sets loose pieces at their seated poses as one undo step; refuses a stale revision.
     pub fn seat_pieces(&self, moves: &[(u32, Pose)], generation: u64, version: u64) -> Changed {
-        let raw: Vec<sys::BmPieceMove> = moves
-            .iter()
-            .map(|&(piece, pose)| sys::BmPieceMove {
-                piece,
-                rotation: pose.rotation.to_raw(),
-                position: pose.position.to_raw(),
-            })
-            .collect();
+        let raw = piece_moves(moves);
         let ptr = if raw.is_empty() { std::ptr::null() } else { raw.as_ptr() };
         take_change(unsafe { sys::bm_session_seat_pieces(self.raw, ptr, raw.len(), generation, version) })
     }
+
+    /// Sets pieces at these world poses as one undo step named "Reset Transform"; refuses a stale revision.
+    pub fn reset_poses(&self, moves: &[(u32, Pose)], generation: u64, version: u64) -> Changed {
+        let raw = piece_moves(moves);
+        let ptr = if raw.is_empty() { std::ptr::null() } else { raw.as_ptr() };
+        take_change(unsafe { sys::bm_session_reset_poses(self.raw, ptr, raw.len(), generation, version) })
+    }
+}
+
+fn piece_moves(moves: &[(u32, Pose)]) -> Vec<sys::BmPieceMove> {
+    moves
+        .iter()
+        .map(|&(piece, pose)| sys::BmPieceMove { piece, rotation: pose.rotation.to_raw(), position: pose.position.to_raw() })
+        .collect()
 }
 
 /// `fields` with every unset field taken from the enclosing scope, then the defaults.

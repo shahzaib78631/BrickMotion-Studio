@@ -98,6 +98,8 @@ class Session {
   /// Sets pieces at these world poses as one undo step (Seat Loose Pieces). Each piece edits its
   /// own part item; a part item shared by several uses moves once, by its first piece.
   Changed seatPieces(const PieceMoves& moves, uint64_t generation, uint64_t version);
+  /// Sets pieces at these world poses as one undo step (Properties › Transform Reset). Refuses when stale.
+  Changed resetPoses(const PieceMoves& moves, uint64_t generation, uint64_t version);
   /// Assigns a named group to selected items in the active definition. Empty removes the mark.
   Changed setGroup(const PieceList& pieces, const std::string& group);
   StringList groupNames() const;

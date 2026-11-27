@@ -1254,6 +1254,7 @@ unsafe extern "C" {
     pub fn bm_session_pose_of(s: *const BmSession, piece: u32) -> BmPieceMove;
     pub fn bm_inspection_fits(i: *mut BmInspection, moving: u32, target: u32, out: *mut BmPieceMove, cap: usize) -> usize;
     pub fn bm_session_seat_pieces(s: *mut BmSession, moves: *const BmPieceMove, n: usize, generation: u64, version: u64) -> BmChange;
+    pub fn bm_session_reset_poses(s: *mut BmSession, moves: *const BmPieceMove, n: usize, generation: u64, version: u64) -> BmChange;
     pub fn bm_inventory_capture(s: *const BmSession, step: i32) -> *mut BmInventory;
     pub fn bm_inventory_prepare(inv: *mut BmInventory, path: *const c_char) -> *mut BmInventoryReport;
     pub fn bm_inventory_report_error(r: *const BmInventoryReport) -> *const c_char;
@@ -1411,7 +1412,7 @@ pub const DECLARED: &[&str] = &[
     "bm_inspection_habit_fits", "bm_habit_fits_len", "bm_habit_fits_at", "bm_habit_fits_name",
     "bm_habit_fits_description", "bm_habit_fits_joint", "bm_habit_fits_why", "bm_habit_fits_free",
     "bm_inspection_fitting_parts", "bm_fitting_parts_len", "bm_fitting_parts_name", "bm_fitting_parts_contact",
-    "bm_fitting_parts_free", "bm_session_seat_pieces",
+    "bm_fitting_parts_free", "bm_session_seat_pieces", "bm_session_reset_poses",
     "bm_inventory_capture", "bm_inventory_prepare", "bm_inventory_report_error", "bm_inventory_report_pieces",
     "bm_inventory_report_spares", "bm_inventory_report_invalid_rows", "bm_inventory_report_missing_len",
     "bm_inventory_report_missing_at", "bm_inventory_report_free", "bm_session_import_inventory", "bm_inventory_free",

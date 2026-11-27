@@ -259,3 +259,20 @@ TEST_CASE("pose readback and Fit Together over bmffi", "[inspection][p3]") {
   bm_inspection_free(insp);
   bm_session_free(t);
 }
+
+TEST_CASE("reset sets a turned piece back square as one named undo step", "[inspection][transform]") {
+  BmSession* s = blankSession();
+  place(s, "3001.dat", 4, BmVec3{0, 0, 0});
+  const uint32_t one = 0;
+  REQUIRE(ok(bm_session_rotate(s, &one, 1, BmVec3{0, 1, 0}, 90, BmVec3{0, 0, 0}, false)));
+  const BmPieceMove turned = bm_session_pose_of(s, 0);
+  CHECK_THAT(turned.rotation.m[0], WithinAbs(0.0, 1e-9));
+
+  const BmPieceMove plain{0, kEye, turned.position};
+  const uint64_t gen = bm_session_generation(s), ver = bm_session_version(s);
+  CHECK_FALSE(ok(bm_session_reset_poses(s, &plain, 1, gen, ver + 1)));
+  REQUIRE(ok(bm_session_reset_poses(s, &plain, 1, gen, ver)));
+  CHECK(take(bm_session_undo_name(s)) == "Reset Transform");
+  CHECK_THAT(bm_session_pose_of(s, 0).rotation.m[0], WithinAbs(1.0, 1e-9));
+  bm_session_free(s);
+}

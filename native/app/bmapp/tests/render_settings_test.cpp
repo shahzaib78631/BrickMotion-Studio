@@ -247,6 +247,34 @@ TEST_CASE("loose pieces are found off their studs and seated as one undo step", 
   CHECK(session.impl().model->pieces()[1].world.t.x == Catch::Approx(3));
 }
 
+TEST_CASE("reset sets pieces back to plain poses as one named undo step", "[bmapp][transform]") {
+  bmapp::Session session;
+  REQUIRE(session.newBlank().ok);
+  REQUIRE(session.placePart("3001.dat", 4, {{}, {0, 0, 0}}, 0, session.generation(), session.version()).refused.empty());
+  REQUIRE(session.placePart("3001.dat", 1, {{}, {200, 0, 0}}, 0, session.generation(), session.version()).refused.empty());
+  REQUIRE(session.rotate({0, 1}, {0, 1, 0}, 90, {0, 0, 0}, false).refused.empty());
+  REQUIRE(session.scale({0}, {2, 2, 2}, {}, {0, 0, 0}, false).refused.empty());
+  const auto turned = session.impl().model->pieces()[0].world;
+  const auto depth = session.undoName();
+
+  bmapp::PieceMoves plain{{0, {{}, {turned.t.x, turned.t.y, turned.t.z}}}};
+  CHECK_FALSE(session.resetPoses(plain, session.generation(), session.version() + 1).refused.empty());  // stale
+  REQUIRE(session.resetPoses(plain, session.generation(), session.version()).refused.empty());
+  CHECK(session.undoName() == "Reset Transform");
+  const auto& reset = session.impl().model->pieces()[0].world;
+  CHECK(reset.r.m[0] == Catch::Approx(1).margin(1e-9));
+  CHECK(reset.r.m[8] == Catch::Approx(1).margin(1e-9));
+  CHECK(reset.t.x == Catch::Approx(turned.t.x).margin(1e-9));
+  session.undo();
+  CHECK(session.undoName() == depth);  // one step back undoes the whole reset
+  CHECK(session.impl().model->pieces()[0].world.r.m[0] == Catch::Approx(turned.r.m[0]).margin(1e-9));
+
+  const auto other = session.impl().model->pieces()[1].world;
+  bmapp::PieceMoves both{{0, {{}, {turned.t.x, turned.t.y, turned.t.z}}}, {1, {{}, {other.t.x, other.t.y, other.t.z}}}};
+  REQUIRE(session.resetPoses(both, session.generation(), session.version()).refused.empty());
+  CHECK(session.undoName() == "Reset 2 Transforms");
+}
+
 TEST_CASE("every shading draws its own picture of the model", "[bmapp][look][viewport][shading]") {
   bmapp::Session session;
   blankWithParts(session);
