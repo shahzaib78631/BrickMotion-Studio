@@ -10,7 +10,7 @@ add_custom_command(OUTPUT ${BMRENDER_SHADER_CPP}
 add_library(bmrender STATIC ${BMRENDER_PREP} ${BMRENDER_METAL} ${BMRENDER_SHADER_CPP})
 target_include_directories(bmrender PUBLIC include PRIVATE src)
 target_compile_options(bmrender PRIVATE $<$<COMPILE_LANGUAGE:OBJCXX>:-fobjc-arc>)
-target_link_libraries(bmrender PUBLIC bmcore PRIVATE bm_warnings
+target_link_libraries(bmrender PUBLIC bmcore PRIVATE bm_warnings nlohmann_json::nlohmann_json
   "-framework Metal" "-framework QuartzCore" "-framework ImageIO" "-framework CoreGraphics" "-framework Foundation")
 
 # Intel Open Image Denoise, from vendor/oidn (outside git; see the phase 7 design). Without it the

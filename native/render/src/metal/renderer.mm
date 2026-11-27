@@ -4,6 +4,9 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cmath>
+#if defined(__aarch64__)
+#include <arm_neon.h>
+#endif
 
 #include "bmr/device.h"
 #include "bmr/tolerances.h"
@@ -343,11 +346,12 @@ void Renderer::Impl::drawIds() {
 void Renderer::Impl::makeTargets() {
   colorMs = depthMs = accumMs = revealMs = ambientMs = color = accum = reveal = ambient = depth = final = mask = aoRaw = aoSoft = giRaw = giSoft = ssrRaw = ssrSoft = glassFront = glassMat = glassBackNear = glassBackFar = glassDepthTex = glassResolved = nil;
   giHist[0] = giHist[1] = ssrHist[0] = ssrHist[1] = rtDepthHist[0] = rtDepthHist[1] = nil;
-  rtptDepth = rtptMat = rtptMotion = rtptDi = rtptDiffRaw = rtptSpecRaw = rtptDiffPing = rtptSpecPing = rtptDiffPong = rtptSpecPong = nil;
+  rtptDepth = rtptMat = rtptMotion = rtptDi = rtptDiffRaw = rtptSpecRaw = rtptDiffPing = rtptSpecPing = rtptDiffPong = nil;
+  rtptGlassTiles = rtptOpaqueTiles = rtptFloorTiles = nil;
   for (int i = 0; i < 2; i++) {
     rtptPosId[i] = rtptNorm[i] = rtptDiffHist[i] = rtptSpecHist[i] = rtptMoments[i] = rtptHLen[i] = rtptTaa[i] = nil;
   }
-  rtptW = rtptH = 0;
+  rtptW = rtptH = rtptTraceW = rtptTraceH = 0;
   rtptHasHistory = false;
   rtptStillFrames = 0;
   hybridHasHistory = false;
@@ -438,7 +442,21 @@ Image Renderer::readback() {
   out.width = impl.width, out.height = impl.height;
   out.rgba.resize(static_cast<size_t>(impl.width) * static_cast<size_t>(impl.height) * 4);
   [impl.final getBytes:out.rgba.data() bytesPerRow:static_cast<NSUInteger>(impl.width) * 4 fromRegion:MTLRegionMake2D(0, 0, static_cast<NSUInteger>(impl.width), static_cast<NSUInteger>(impl.height)) mipmapLevel:0];
+#if defined(__aarch64__)
+  uint8_t* p = out.rgba.data();
+  const size_t n = out.rgba.size();
+  size_t i = 0;
+  for (; i + 64 <= n; i += 64) {
+    uint8x16x4_t v = vld4q_u8(p + i);
+    const uint8x16_t tmp = v.val[0];
+    v.val[0] = v.val[2];
+    v.val[2] = tmp;
+    vst4q_u8(p + i, v);
+  }
+  for (; i < n; i += 4) std::swap(p[i], p[i + 2]);
+#else
   for (size_t i = 0; i < out.rgba.size(); i += 4) std::swap(out.rgba[i], out.rgba[i + 2]);  // stored blue first
+#endif
   return out;
 }
 

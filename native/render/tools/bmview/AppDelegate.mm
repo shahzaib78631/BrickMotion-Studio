@@ -39,19 +39,20 @@ std::string describe(const bm::LoadReport& r) {
 
 @implementation AppDelegate {
   NSString* _path;
-  BOOL _play, _raytracedGlass, _correct, _cleanGrown;
+  BOOL _play, _raytracedGlass, _rtpt, _noPlan, _correct, _cleanGrown;
   bm::plan::Order _order;
   bm::plan::FlightShape _flight;
   bm::plan::Planner _planner;
+  BmViewWorldLaunch _worldLaunch;
   std::unique_ptr<bmview::Session> _session;
   NSWindow* _window;
   ViewportView* _view;
   dispatch_group_t _planning;
 }
 
-- (instancetype)initWithFile:(NSString*)path play:(BOOL)play raytracedGlass:(BOOL)raytracedGlass correct:(BOOL)correct cleanGrown:(BOOL)cleanGrown order:(bm::plan::Order)order flight:(bm::plan::FlightShape)flight planner:(bm::plan::Planner)planner {
+- (instancetype)initWithFile:(NSString*)path play:(BOOL)play raytracedGlass:(BOOL)raytracedGlass rtpt:(BOOL)rtpt noPlan:(BOOL)noPlan correct:(BOOL)correct cleanGrown:(BOOL)cleanGrown order:(bm::plan::Order)order flight:(bm::plan::FlightShape)flight planner:(bm::plan::Planner)planner worldLaunch:(BmViewWorldLaunch)worldLaunch {
   self = [super init];
-  if (self) _path = path, _play = play, _raytracedGlass = raytracedGlass, _correct = correct, _cleanGrown = cleanGrown, _order = order, _flight = flight, _planner = planner, _planning = dispatch_group_create();
+  if (self) _path = path, _play = play, _raytracedGlass = raytracedGlass, _rtpt = rtpt, _noPlan = noPlan, _correct = correct, _cleanGrown = cleanGrown, _order = order, _flight = flight, _planner = planner, _worldLaunch = std::move(worldLaunch), _planning = dispatch_group_create();
   return self;
 }
 
@@ -61,8 +62,59 @@ std::string describe(const bm::LoadReport& r) {
   auto s = std::make_unique<bmview::Session>();
   s->file = std::filesystem::path(_path.UTF8String);
   s->raytracedGlass = _raytracedGlass;
+  s->realtimePathTrace = _rtpt;
+  s->noPlan = _noPlan;
   s->flight = _flight;
   s->planner = _planner;
+
+  if (bmr::isWorldAssetFile(s->file)) {
+    std::string err;
+    bmr::WorldAsset asset = bmr::loadWorldAsset(s->file, &err);
+    if (asset.meshes.empty()) {
+      fail([NSString stringWithFormat:@"“%@” could not be opened.", _path.lastPathComponent], err);
+    }
+    s->world = bmr::WorldRenderer::create(asset, &err);
+    if (!s->world) fail(@"This Mac cannot draw the 3D scene.", err);
+    if (!_worldLaunch.hdrPath.empty()) {
+      if (!s->world->loadEnvironmentHdr(_worldLaunch.hdrPath)) {
+        std::fprintf(stderr, "bmview: warning: could not load HDR skybox %s\n", _worldLaunch.hdrPath.c_str());
+      }
+    }
+    s->isWorld = true;
+    s->noPlan = true;
+    s->worldOptions.clay = _worldLaunch.clay;
+    s->worldOptions.studioRig = _worldLaunch.studioRig;
+    s->worldOptions.floor = _worldLaunch.floorExplicit ? _worldLaunch.floor : _worldLaunch.studioRig;
+    if (_worldLaunch.hasEye) {
+      s->worldHasDefaultView = true;
+      s->worldDefaultEye = {_worldLaunch.eye[0], _worldLaunch.eye[1], _worldLaunch.eye[2]};
+      s->worldDefaultTarget = {_worldLaunch.target[0], _worldLaunch.target[1], _worldLaunch.target[2]};
+      s->worldDefaultFovDeg = _worldLaunch.fovDeg > 5.0 ? _worldLaunch.fovDeg : 50.0;
+    } else if (asset.hasDefaultView) {
+      s->worldHasDefaultView = true;
+      s->worldDefaultEye = asset.defaultEye;
+      s->worldDefaultTarget = asset.defaultTarget;
+      s->worldDefaultFovDeg = _worldLaunch.fovDeg > 5.0 ? _worldLaunch.fovDeg : asset.defaultFovDeg;
+    } else if (_worldLaunch.fovDeg > 5.0) {
+      s->worldDefaultFovDeg = _worldLaunch.fovDeg;
+    }
+    _session = std::move(s);
+    _window = [[NSWindow alloc] initWithContentRect:NSMakeRect(0, 0, 1280, 800)
+                                          styleMask:NSWindowStyleMaskTitled | NSWindowStyleMaskClosable | NSWindowStyleMaskMiniaturizable | NSWindowStyleMaskResizable
+                                            backing:NSBackingStoreBuffered
+                                              defer:NO];
+    _window.delegate = self;
+    _window.collectionBehavior = NSWindowCollectionBehaviorFullScreenPrimary;
+    _window.contentMinSize = NSMakeSize(320, 200);
+    _view = [[ViewportView alloc] initWithFrame:NSMakeRect(0, 0, 1280, 800) session:_session.get()];
+    _window.contentView = _view;
+    _window.title = [_path.lastPathComponent stringByAppendingString:@" — BrickMotion New-Era RTPT"];
+    [_window center];
+    [_window makeKeyAndOrderFront:nil];
+    [NSApp activate];
+    return;
+  }
+
   s->ldraw = bmtools::ldrawDir();
   if (s->ldraw.empty()) fail(@"No LDraw library was found.", "Set BM_LDRAW_DIR to the folder that holds LDConfig.ldr.");
   try {
@@ -89,10 +141,11 @@ std::string describe(const bm::LoadReport& r) {
   _window.contentMinSize = NSMakeSize(320, 200);
   _view = [[ViewportView alloc] initWithFrame:NSMakeRect(0, 0, 1280, 800) session:_session.get()];
   _window.contentView = _view;
-  [self setTitle:YES];
+  [self setTitle:!_noPlan];
   [_window center];
   [_window makeKeyAndOrderFront:nil];
   [NSApp activate];
+  if (_noPlan) return;
 
   // The plan is made while the model is already on screen.
   bmview::Session* session = _session.get();

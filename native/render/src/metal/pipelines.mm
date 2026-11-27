@@ -117,8 +117,8 @@ Pipelines makePipelines(Device& device, std::string& error) {
     d.vertexDescriptor = vd;
     d.colorAttachments[0].pixelFormat = MTLPixelFormatRGBA32Float;
     d.colorAttachments[1].pixelFormat = MTLPixelFormatRGBA16Float;
-    d.colorAttachments[2].pixelFormat = MTLPixelFormatRGBA16Float;
-    d.colorAttachments[3].pixelFormat = MTLPixelFormatRGBA16Float;
+    d.colorAttachments[2].pixelFormat = MTLPixelFormatRGBA8Unorm;
+    d.colorAttachments[3].pixelFormat = MTLPixelFormatRG16Float;
     NSError* err = nil;
     return d.vertexFunction && d.fragmentFunction ? [device.device newRenderPipelineStateWithDescriptor:d error:&err] : nil;
   };
@@ -145,7 +145,10 @@ Pipelines makePipelines(Device& device, std::string& error) {
   p.rtptTraceGlass = makeCompute(@"rtptTraceGlass");
   p.rtptSvgfTemporal = makeCompute(@"rtptSvgfTemporal");
   p.rtptSvgfAtrous = makeCompute(@"rtptSvgfAtrous");
+  p.rtptSvgfAtrousDiff = makeCompute(@"rtptSvgfAtrousDiff");
   p.rtptResolveTaa = makeCompute(@"rtptResolveTaa");
+  p.rtptReModulateTrace = makeCompute(@"rtptReModulateTrace");
+  p.rtptResolveTaau = makeCompute(@"rtptResolveTaau");
   p.edges = make(device, @"edgeVertex", @"edgeFragment", Writes::Over, none, depth32, kSamples, nil, error);
   p.height = make(device, @"heightVertex", @"heightFragment", Writes::Least, MTLPixelFormatRG16Float, none, 1, brickVertices(), error);
   p.shadow = make(device, @"shadowVertex", nil, Writes::Single, none, depth32, 1, brickVertices(), error);

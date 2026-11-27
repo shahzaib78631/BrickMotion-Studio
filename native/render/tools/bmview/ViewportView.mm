@@ -40,6 +40,14 @@ constexpr double kReadoutSeconds = 0.25;
   NSPoint _pressedAt, _lastAt;
   bool _dragged;
 
+  // Native 3D World scene camera (+Y up: seamless FPS flythrough & 3D orbit!).
+  bm::Vec3 _wEye, _wTarget;
+  double _wYaw, _wPitch, _wDist, _wFovDeg;
+  bool _wFreeFly;
+  uint32_t _wKeys;  // bit 0:W, 1:S, 2:A, 3:D, 4:E/2(up), 5:Q/1(down), 6:Shift
+  CFTimeInterval _wLastTick;
+  double _wSunAzimuth, _wSunElevation;
+
   // The readout's running sums since it last showed them.
   double _cpuSum, _gpuSum;
   int _framesSummed;
@@ -57,8 +65,9 @@ constexpr double kReadoutSeconds = 0.25;
   _options.refractiveGlass = session->raytracedGlass;
   _options.screenSpaceGi = false;
   _options.hybridRt = false;
-  _options.studioLook = true;
-  _options.neuralShader = true;
+  _options.studioLook = !session->realtimePathTrace;
+  _options.neuralShader = !session->realtimePathTrace;
+  _options.realtimePathTrace = session->realtimePathTrace;
   _options.pathTraced = false;
   _options.pathMaxSamples = 64;
   _options.pathSamplesPerFrame = 2;
@@ -66,14 +75,30 @@ constexpr double kReadoutSeconds = 0.25;
   self.layerContentsRedrawPolicy = NSViewLayerContentsRedrawNever;
 
   _readout = [NSTextField labelWithString:@""];
-  _readout.font = [NSFont monospacedDigitSystemFontOfSize:11 weight:NSFontWeightRegular];
-  _readout.textColor = NSColor.secondaryLabelColor;
+  _readout.font = [NSFont monospacedDigitSystemFontOfSize:11 weight:NSFontWeightMedium];
+  _readout.textColor = session->isWorld ? NSColor.whiteColor : NSColor.secondaryLabelColor;
+  if (session->isWorld) {
+    _readout.wantsLayer = YES;
+    _readout.drawsBackground = YES;
+    _readout.backgroundColor = [NSColor colorWithWhite:0.06 alpha:0.62];
+    _readout.layer.cornerRadius = 5;
+    _readout.layer.masksToBounds = YES;
+  }
   _readout.translatesAutoresizingMaskIntoConstraints = NO;
   [self addSubview:_readout];
   [NSLayoutConstraint activateConstraints:@[
     [_readout.leadingAnchor constraintEqualToAnchor:self.leadingAnchor constant:12],
     [_readout.topAnchor constraintEqualToAnchor:self.topAnchor constant:10],
   ]];
+  if (session->isWorld) {
+    const float* s = session->worldOptions.sunDir;
+    const double slen = std::max(1e-6, std::sqrt(double(s[0]) * s[0] + double(s[1]) * s[1] + double(s[2]) * s[2]));
+    _wSunElevation = std::asin(std::clamp(double(s[1]) / slen, -0.95, 0.95));
+    _wSunAzimuth = std::atan2(double(s[0]), double(s[2]));
+    _wFreeFly = session->worldHasDefaultView;
+    _wFovDeg = session->worldDefaultFovDeg;
+    _wLastTick = CACurrentMediaTime();
+  }
   return self;
 }
 
@@ -137,11 +162,64 @@ constexpr double kReadoutSeconds = 0.25;
   if (w == _width && h == _height) return;
   _width = w, _height = h;
   if (w > 0 && h > 0) self.metalLayer.drawableSize = CGSizeMake(w, h);
-  _session->renderer->resize(w, h);
+  if (_session->isWorld) _session->world->resize(w, h);
+  else _session->renderer->resize(w, h);
   [self changed];
 }
 
 - (double)aspect { return _height > 0 ? double(_width) / _height : 1.0; }
+
+- (bmr::Camera)worldCamera {
+  const bm::Box& b = _session->world->bounds();
+  const double diag = b.empty() ? 10.0 : std::max(0.05, bm::length(b.max - b.min));
+  bmr::Camera c;
+  c.eye = _wEye;
+  c.target = _wTarget;
+  c.up = {0, 1, 0};
+  c.fovY = _wFovDeg * M_PI / 180.0;
+  c.aspect = self.aspect;
+  c.near = std::max(diag * 2e-4, 0.01);
+  c.far = std::max(bm::length(((b.min + b.max) * 0.5) - c.eye) + diag * 2.0, diag * 4.0);
+  return c;
+}
+
+- (void)syncWorldFromEyeTarget {
+  bm::Vec3 f = _wTarget - _wEye;
+  _wDist = std::max(1e-3, bm::length(f));
+  f = f * (1.0 / _wDist);
+  _wPitch = std::asin(std::clamp(f.y, -0.995, 0.995));
+  _wYaw = std::atan2(f.x, f.z);
+}
+
+- (void)syncWorldSun {
+  const double ce = std::cos(_wSunElevation);
+  _session->worldOptions.sunDir[0] = static_cast<float>(ce * std::sin(_wSunAzimuth));
+  _session->worldOptions.sunDir[1] = static_cast<float>(std::sin(_wSunElevation));
+  _session->worldOptions.sunDir[2] = static_cast<float>(ce * std::cos(_wSunAzimuth));
+}
+
+- (void)tickWorldKeys {
+  const CFTimeInterval now = CACurrentMediaTime();
+  const double dt = std::clamp(now - _wLastTick, 0.001, 0.1);
+  _wLastTick = now;
+  if ((_wKeys & 0x3Fu) == 0u) return;
+  const bm::Box& b = _session->world->bounds();
+  const double diag = b.empty() ? 10.0 : std::max(0.1, bm::length(b.max - b.min));
+  const double speed = diag * 0.12 * dt * ((_wKeys & 64u) ? 3.5 : 1.0);
+  const bm::Vec3 fwd = bm::normalized(_wTarget - _wEye);
+  bm::Vec3 rgt = bm::cross(fwd, bm::Vec3{0, 1, 0});
+  rgt = bm::length(rgt) > 1e-6 ? bm::normalized(rgt) : bm::Vec3{1, 0, 0};
+  bm::Vec3 delta{0, 0, 0};
+  if (_wKeys & 1u) delta = delta + fwd * speed;
+  if (_wKeys & 2u) delta = delta - fwd * speed;
+  if (_wKeys & 8u) delta = delta + rgt * speed;
+  if (_wKeys & 4u) delta = delta - rgt * speed;
+  if (_wKeys & 16u) delta.y += speed;
+  if (_wKeys & 32u) delta.y -= speed;
+  _wEye = _wEye + delta;
+  _wTarget = _wTarget + delta;
+  [self moved];
+}
 
 // ---- drawing ----
 
@@ -152,6 +230,21 @@ constexpr double kReadoutSeconds = 0.25;
 }
 
 - (void)metalDisplayLink:(CAMetalDisplayLink*)link needsUpdate:(CAMetalDisplayLinkUpdate*)update {
+  if (_session->isWorld) {
+    [self tickWorldKeys];
+    if (!_dirty && (_wKeys & 0x3Fu) == 0u) {
+      link.paused = YES;
+      return;
+    }
+    bmr::WorldRenderer& w = *_session->world;
+    const bmr::FrameStats s = w.draw([self worldCamera], _session->worldOptions, (__bridge void*)update.drawable);
+    _dirty = ((_wKeys & 0x3Fu) != 0u) || s.settling || (!s.submitted && _width > 0 && _height > 0);
+    if (s.submitted) {
+      _lastStats = s;
+      _cpuSum += s.cpuMs, _gpuSum += w.lastGpuMs(), _framesSummed++;
+    }
+    return;
+  }
   if (_playing) [self advance];
   if (!_dirty) {
     link.paused = YES;  // nothing changed: an idle window draws nothing
@@ -243,20 +336,38 @@ constexpr double kReadoutSeconds = 0.25;
 
 - (void)showReadout {
   if (_readout.hidden) return;
+  if (_session->isWorld) {
+    bmr::WorldRenderer& w = *_session->world;
+    const double cpu = _framesSummed ? _cpuSum / _framesSummed : _lastStats.cpuMs;
+    const double gpu = _framesSummed ? _gpuSum / _framesSummed : w.lastGpuMs();
+    const double fps = gpu > 0.05 ? std::min(999.0, 1000.0 / gpu) : 0.0;
+    const char* look = _session->worldOptions.clay ? "CLAY" : (_session->worldOptions.studioRig ? "STUDIO" : "PBR");
+    const char* nav = _wFreeFly ? "FLY" : "ORBIT";
+    _readout.stringValue = [NSString stringWithFormat:@" %.1f ms gpu (%.0f fps) · %.1f ms cpu · %.1fk tris · %u meshes · %u tex · RTPT %s (%u spp) · %s [WASD/QE · C Clay · L Rig · [/] Sun · O Nav] ",
+                                                      gpu, fps, cpu, w.triangleCount() / 1000.0, w.meshCount(), w.textureCount(),
+                                                      look, _lastStats.pathSamples, nav];
+    _cpuSum = _gpuSum = 0, _framesSummed = 0;
+    return;
+  }
   const bmr::Scene& scene = _session->renderer->scene();
   const size_t total = scene.where.size();
-  NSString* frame = _session->planned ? [NSString stringWithFormat:@"frame %d / %d", static_cast<int>(_frame), _session->planned->timeline.frames] : @"planning…";
+  NSString* frame = _session->planned
+      ? [NSString stringWithFormat:@"frame %d / %d", static_cast<int>(_frame), _session->planned->timeline.frames]
+      : (_session->noPlan ? @"model" : @"planning…");
   const double cpu = _framesSummed ? _cpuSum / _framesSummed : _lastStats.cpuMs;
   const double gpu = _framesSummed ? _gpuSum / _framesSummed : _session->renderer->lastGpuMs();
-  NSString* mode = _options.neuralShader
-      ? @" · NEURAL"
-      : (_options.studioLook
-             ? (_lastStats.worldGiReady
-                    ? (_options.worldGiOcclusion ? @" · STUDIO + World GI + Vis" : @" · STUDIO + World GI")
-                    : (_lastStats.worldGiBaking ? @" · STUDIO (World GI baking…)" : @" · STUDIO"))
-             : @"");
-  _readout.stringValue = [NSString stringWithFormat:@"%@ · cpu %.1f ms · gpu %.1f ms · %u/%zu pieces · F %u L %u B %u%@", frame, cpu, gpu, _lastStats.instances, total,
-                                                    _lastStats.byDetail[0], _lastStats.byDetail[1], _lastStats.byDetail[2], mode];
+  const double fps = gpu > 0.05 ? std::min(999.0, 1000.0 / gpu) : 0.0;
+  NSString* mode = _options.realtimePathTrace
+      ? [NSString stringWithFormat:@" · RTPT (%u spp)", _lastStats.pathSamples]
+      : (_options.neuralShader
+             ? @" · NEURAL"
+             : (_options.studioLook
+                    ? (_lastStats.worldGiReady
+                           ? (_options.worldGiOcclusion ? @" · STUDIO + World GI + Vis" : @" · STUDIO + World GI")
+                           : (_lastStats.worldGiBaking ? @" · STUDIO (World GI baking…)" : @" · STUDIO"))
+                    : @""));
+  _readout.stringValue = [NSString stringWithFormat:@"%@ · cpu %.1f ms · gpu %.1f ms (%.0f fps) · %.1fk tris · %u/%zu parts%@", frame, cpu, gpu, fps,
+                                                    _lastStats.triangles / 1000.0, _lastStats.instances, total, mode];
   _cpuSum = _gpuSum = 0, _framesSummed = 0;
 }
 
@@ -268,7 +379,30 @@ constexpr double kReadoutSeconds = 0.25;
   [self moved];
 }
 
-- (void)frameModel { [self frameBounds:_session->renderer->scene().bounds]; }
+- (void)frameModel {
+  if (_session->isWorld) {
+    if (_session->worldHasDefaultView) {
+      _wEye = _session->worldDefaultEye;
+      _wTarget = _session->worldDefaultTarget;
+      _wFovDeg = _session->worldDefaultFovDeg;
+    } else {
+      const bm::Box& b = _session->world->bounds();
+      const bm::Vec3 center = b.empty() ? bm::Vec3{0, 0, 0} : (b.min + b.max) * 0.5;
+      const double diag = b.empty() ? 5.0 : std::max(0.05, bm::length(b.max - b.min));
+      const double fovRad = _wFovDeg * M_PI / 180.0;
+      const double halfY = fovRad * 0.5;
+      const double halfX = std::atan(std::tan(halfY) * self.aspect);
+      const double dist = 1.02 * (diag * 0.5) / std::sin(std::min(halfY, halfX));
+      const double az = 0.62, el = 0.24, ce = std::cos(el);
+      _wTarget = center;
+      _wEye = center + bm::Vec3{ce * std::sin(az), std::sin(el), ce * std::cos(az)} * dist;
+    }
+    [self syncWorldFromEyeTarget];
+    [self moved];
+    return;
+  }
+  [self frameBounds:_session->renderer->scene().bounds];
+}
 
 - (void)frameSelectionOrModel {
   const bm::Box box = _session->renderer->selectionBounds();  // where the selected pieces are shown now, mid-flight too
@@ -305,17 +439,37 @@ constexpr double kReadoutSeconds = 0.25;
   const NSPoint at = [self convertPoint:event.locationInWindow fromView:nil];
   if (std::hypot(at.x - _pressedAt.x, at.y - _pressedAt.y) > kClickSlop) _dragged = true;
   if (!_dragged) return;
-  _orbit.drag(at.x - _lastAt.x, -(at.y - _lastAt.y));  // view points have y up; drag() takes it down
+  const double dx = at.x - _lastAt.x, dy = at.y - _lastAt.y;
   _lastAt = at;
+  if (_session->isWorld) {
+    if (_wFreeFly) {
+      _wYaw -= dx * 0.0055;
+      _wPitch = std::clamp(_wPitch + dy * 0.0055, -1.48, 1.48);
+      const double cp = std::cos(_wPitch);
+      const bm::Vec3 fwd{cp * std::sin(_wYaw), std::sin(_wPitch), cp * std::cos(_wYaw)};
+      _wTarget = _wEye + fwd * _wDist;
+    } else {
+      _wYaw -= dx * 0.007;
+      _wPitch = std::clamp(_wPitch - dy * 0.007, -1.48, 1.48);
+      const double cp = std::cos(_wPitch);
+      const bm::Vec3 fwd{cp * std::sin(_wYaw), std::sin(_wPitch), cp * std::cos(_wYaw)};
+      _wEye = _wTarget - fwd * _wDist;
+    }
+    [self moved];
+    return;
+  }
+  _orbit.drag(dx, -dy);  // view points have y up; drag() takes it down
   [self moved];
 }
 
 - (void)mouseUp:(NSEvent*)event {
   if (_dragged) return;
   if (event.clickCount == 2) {
-    [self frameSelectionOrModel];
+    if (_session->isWorld) [self frameModel];
+    else [self frameSelectionOrModel];
     return;
   }
+  if (_session->isWorld) return;
   const NSPoint at = [self convertPoint:event.locationInWindow fromView:nil];
   const double s = self.pixelsPerPoint;
   const uint32_t piece = _session->renderer->pick(static_cast<int>(at.x * s), static_cast<int>((self.bounds.size.height - at.y) * s));
@@ -329,12 +483,42 @@ constexpr double kReadoutSeconds = 0.25;
 - (void)rightMouseDragged:(NSEvent*)event {
   const NSPoint at = [self convertPoint:event.locationInWindow fromView:nil];
   const double s = self.pixelsPerPoint;
+  if (_session->isWorld) {
+    const double perPx = 2.0 * _wDist * std::tan(_wFovDeg * M_PI / 360.0) / std::max(1, _height);
+    const bm::Vec3 fwd = bm::normalized(_wTarget - _wEye);
+    const bm::Vec3 rgt = bm::normalized(bm::cross(fwd, bm::Vec3{0, 1, 0}));
+    const bm::Vec3 up = bm::cross(rgt, fwd);
+    const bm::Vec3 shift = rgt * (-(at.x - _lastAt.x) * s * perPx) + up * (-(at.y - _lastAt.y) * s * perPx);
+    _wEye = _wEye + shift;
+    _wTarget = _wTarget + shift;
+    _lastAt = at;
+    [self moved];
+    return;
+  }
   _orbit.pan((at.x - _lastAt.x) * s, -(at.y - _lastAt.y) * s, _height);
   _lastAt = at;
   [self moved];
 }
 
 - (void)scrollWheel:(NSEvent*)event {
+  if (_session->isWorld) {
+    const double dy = event.hasPreciseScrollingDeltas ? event.scrollingDeltaY * 0.08 : event.scrollingDeltaY;
+    const double factor = std::exp(-kWheelZoom * dy);
+    if (_wFreeFly) {
+      const bm::Box& b = _session->world->bounds();
+      const double diag = b.empty() ? 10.0 : std::max(0.1, bm::length(b.max - b.min));
+      const bm::Vec3 fwd = bm::normalized(_wTarget - _wEye);
+      const bm::Vec3 step = fwd * (dy * diag * 0.008);
+      _wEye = _wEye + step;
+      _wTarget = _wTarget + step;
+    } else {
+      const bm::Vec3 fwd = bm::normalized(_wTarget - _wEye);
+      _wDist = std::max(1e-3, _wDist * factor);
+      _wEye = _wTarget - fwd * _wDist;
+    }
+    [self moved];
+    return;
+  }
   if (event.hasPreciseScrollingDeltas) {  // two fingers on a trackpad: pan
     const double s = self.pixelsPerPoint;
     _orbit.pan(event.scrollingDeltaX * s, event.scrollingDeltaY * s, _height);
@@ -345,15 +529,72 @@ constexpr double kReadoutSeconds = 0.25;
 }
 
 - (void)magnifyWithEvent:(NSEvent*)event {
+  if (_session->isWorld) {
+    const double factor = 1.0 / std::max(0.1, 1.0 + event.magnification);
+    const bm::Vec3 fwd = bm::normalized(_wTarget - _wEye);
+    _wDist = std::max(1e-3, _wDist * factor);
+    _wEye = _wTarget - fwd * _wDist;
+    [self moved];
+    return;
+  }
   [self zoom:1.0 / std::max(0.1, 1.0 + event.magnification) toward:[self convertPoint:event.locationInWindow fromView:nil]];
 }
 
 // ---- keys ----
 
+- (void)flagsChanged:(NSEvent*)event {
+  if (_session->isWorld) {
+    if (event.modifierFlags & NSEventModifierFlagShift) _wKeys |= 64u;
+    else _wKeys &= ~64u;
+  }
+  [super flagsChanged:event];
+}
+
+- (void)keyUp:(NSEvent*)event {
+  if (_session->isWorld) {
+    NSString* keys = event.charactersIgnoringModifiers;
+    if (keys.length > 0) {
+      switch ([keys characterAtIndex:0]) {
+        case 'w': case 'W': _wKeys &= ~1u; return;
+        case 's': case 'S': _wKeys &= ~2u; return;
+        case 'a': case 'A': _wKeys &= ~4u; return;
+        case 'd': case 'D': _wKeys &= ~8u; return;
+        case 'e': case 'E': case '2': _wKeys &= ~16u; return;
+        case 'q': case 'Q': case '1': _wKeys &= ~32u; return;
+        default: break;
+      }
+    }
+  }
+  [super keyUp:event];
+}
+
 - (void)keyDown:(NSEvent*)event {
   NSString* keys = event.charactersIgnoringModifiers;
   if (keys.length == 0) return;
   const unichar k = [keys characterAtIndex:0];
+  if (_session->isWorld) {
+    if (event.modifierFlags & NSEventModifierFlagShift) _wKeys |= 64u;
+    else _wKeys &= ~64u;
+    switch (k) {
+      case 'w': case 'W': _wKeys |= 1u; _wLastTick = CACurrentMediaTime(); [self changed]; return;
+      case 's': case 'S': _wKeys |= 2u; _wLastTick = CACurrentMediaTime(); [self changed]; return;
+      case 'a': case 'A': _wKeys |= 4u; _wLastTick = CACurrentMediaTime(); [self changed]; return;
+      case 'd': case 'D': _wKeys |= 8u; _wLastTick = CACurrentMediaTime(); [self changed]; return;
+      case 'e': case 'E': case '2': _wKeys |= 16u; _wLastTick = CACurrentMediaTime(); [self changed]; return;
+      case 'q': case 'Q': case '1': _wKeys |= 32u; _wLastTick = CACurrentMediaTime(); [self changed]; return;
+      case ' ': case 'f': case 'F': [self frameModel]; return;
+      case 'c': case 'C': _session->worldOptions.clay = !_session->worldOptions.clay; [self changed]; return;
+      case 'l': case 'L': _session->worldOptions.studioRig = !_session->worldOptions.studioRig; [self changed]; return;
+      case 'g': case 'G': _session->worldOptions.floor = !_session->worldOptions.floor; [self changed]; return;
+      case 'o': case 'O': _wFreeFly = !_wFreeFly; [self showReadout]; return;
+      case '[': _wSunAzimuth -= 0.12; [self syncWorldSun]; [self changed]; return;
+      case ']': _wSunAzimuth += 0.12; [self syncWorldSun]; [self changed]; return;
+      case '-': case '_': _session->worldOptions.exposure = std::max(0.15f, _session->worldOptions.exposure * 0.85f); [self changed]; return;
+      case '=': case '+': _session->worldOptions.exposure = std::min(8.0f, _session->worldOptions.exposure * 1.18f); [self changed]; return;
+      case 'i': case 'I': _readout.hidden = !_readout.hidden; [self showReadout]; return;
+      default: [super keyDown:event]; return;
+    }
+  }
   switch (k) {
     case ' ': [self togglePlay]; return;
     case NSLeftArrowFunctionKey: if (_session->planned) [self step:-1]; return;
@@ -369,10 +610,12 @@ constexpr double kReadoutSeconds = 0.25;
     case 'p': case 'P': _options.pathTraced = !_options.pathTraced; break;
     case 'h': case 'H': _options.hybridRt = !_options.hybridRt;
       if (_options.hybridRt) _options.studioLook = false; break;
+    case 't': case 'T': _options.realtimePathTrace = !_options.realtimePathTrace;
+      if (_options.realtimePathTrace) _options.studioLook = _options.neuralShader = _options.hybridRt = _options.screenSpaceGi = _options.pathTraced = false; break;
     case 'k': case 'K': _options.studioLook = !_options.studioLook;
-      if (_options.studioLook) _options.hybridRt = _options.screenSpaceGi = _options.pathTraced = _options.neuralShader = false; break;
+      if (_options.studioLook) _options.realtimePathTrace = _options.hybridRt = _options.screenSpaceGi = _options.pathTraced = _options.neuralShader = false; break;
     case 'n': case 'N': _options.neuralShader = !_options.neuralShader;
-      if (_options.neuralShader) _options.studioLook = _options.hybridRt = _options.screenSpaceGi = _options.pathTraced = false; break;
+      if (_options.neuralShader) _options.realtimePathTrace = _options.studioLook = _options.hybridRt = _options.screenSpaceGi = _options.pathTraced = false; break;
     case 'v': case 'V': _options.worldGiOcclusion = !_options.worldGiOcclusion; break;
     case 'i': case 'I': _readout.hidden = !_readout.hidden; [self showReadout]; return;
     case 'w': case 'W': [self switchFlight]; return;

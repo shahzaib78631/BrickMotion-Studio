@@ -20,6 +20,7 @@
 #include "bmr/renderer.h"
 #include "bmr/scene.h"
 #include "bmr/tolerances.h"
+#include "bmr/world_renderer.h"
 #include "engine.h"
 #include "shot_options.h"
 
@@ -95,9 +96,12 @@ int main(int argc, char** argv) {
   std::string saveModel;
   int detail = -1;
   bmr::FrameOptions options;
+  bmr::WorldFrameOptions worldOpt;
+  bool worldFloorExplicit = false;
+  std::string hdrPath;
   bool stats = false;
   int benchFrames = 0;
-  int rtptFrames = 1;
+  int rtptFrames = 0;
   std::vector<uint32_t> select;
   for (size_t i = 1; i < args.size(); i++) {
     const int shared = bmtools::parseShotOption(shot, args, i);
@@ -112,13 +116,24 @@ int main(int argc, char** argv) {
     else if (a == "--no-edges") options.edges = false;
     else if (a == "--no-shadows") options.shadows = false;
     else if (a == "--no-ao") options.ambientOcclusion = false;
-    else if (a == "--no-floor") options.floor = false;
+    else if (a == "--no-floor") { options.floor = false; worldOpt.floor = false; worldFloorExplicit = true; }
+    else if (a == "--floor") { options.floor = true; worldOpt.floor = true; worldFloorExplicit = true; }
     else if (a == "--no-cull") options.cull = false;
     else if (a == "--raytraced-glass") options.refractiveGlass = true;
     else if (a == "--ssgi") options.screenSpaceGi = true;
     else if (a == "--hybrid-rt") options.hybridRt = true;
     else if (a == "--studio") options.studioLook = true;
     else if (a == "--neural") options.neuralShader = true;
+    else if (a == "--clay") { options.clay = true; worldOpt.clay = true; }
+    else if (a == "--studio-rig") { worldOpt.studioRig = true; }
+    else if (a == "--hdr") { hdrPath = value(); }
+    else if (a == "--sun") {
+      const std::string s = value();
+      if (std::sscanf(s.c_str(), "%f,%f,%f", &worldOpt.sunDir[0], &worldOpt.sunDir[1], &worldOpt.sunDir[2]) != 3) return usage();
+    }
+    else if (a == "--sun-intensity") { worldOpt.sunIntensity = std::strtof(value().c_str(), nullptr); }
+    else if (a == "--sky-intensity") { worldOpt.skyIntensity = std::strtof(value().c_str(), nullptr); }
+    else if (a == "--exposure") { worldOpt.exposure = std::strtof(value().c_str(), nullptr); }
     else if (a == "--pt") {
       options.pathTraced = true;
       options.pathMaxSamples = std::max(1, std::atoi(value().c_str()));
@@ -150,7 +165,10 @@ int main(int argc, char** argv) {
     else return usage();
   }
   options.lightsFollowCamera = shot.lightsFollow;
-  if (shot.backgroundSet) std::copy(std::begin(shot.background), std::end(shot.background), std::begin(options.background));
+  if (shot.backgroundSet) {
+    std::copy(std::begin(shot.background), std::end(shot.background), std::begin(options.background));
+    std::copy(std::begin(shot.background), std::end(shot.background), std::begin(worldOpt.background));
+  }
   const std::string& out = shot.out;
   const int width = shot.width, height = shot.height, frame = shot.frame, columns = shot.columns, rows = shot.rows;
   if (out.empty() && benchFrames == 0 && saveModel.empty()) return usage();
@@ -160,6 +178,111 @@ int main(int argc, char** argv) {
     std::fprintf(stderr, "bmshot: cannot draw here: %s\n", *bmr::shaderError() ? bmr::shaderError() : "no Metal device");
     return kFailure;
   }
+
+  // Native zero-conversion 3D World Asset path (.glb / .gltf / .obj + .mtl + PBR textures + .hdr skybox).
+  if (bmr::isWorldAssetFile(input)) {
+    std::string err;
+    const auto tLoad0 = std::chrono::steady_clock::now();
+    bmr::WorldAsset asset = bmr::loadWorldAsset(input, &err);
+    if (asset.meshes.empty()) {
+      std::fprintf(stderr, "bmshot: failed to load %s: %s\n", input.c_str(), err.c_str());
+      return kFailure;
+    }
+    auto wr = bmr::WorldRenderer::create(asset, &err);
+    if (!wr) {
+      std::fprintf(stderr, "bmshot: WorldRenderer init failed: %s\n", err.c_str());
+      return kFailure;
+    }
+    const double loadMs = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - tLoad0).count();
+    if (!hdrPath.empty() && !wr->loadEnvironmentHdr(hdrPath)) {
+      std::fprintf(stderr, "bmshot: warning: failed to load HDR skybox %s\n", hdrPath.c_str());
+    }
+    if (worldOpt.studioRig && !worldFloorExplicit) worldOpt.floor = true;
+    wr->resize(width, height);
+
+    const double aspect = double(width) / height;
+    const bm::Box& b = wr->bounds();
+    const bm::Vec3 center = (b.min + b.max) * 0.5;
+    const double diag = std::max(0.05, bm::length(b.max - b.min));
+    bmr::Camera cam;
+    cam.up = {0, 1, 0};
+    cam.aspect = aspect;
+    cam.fovY = (std::isfinite(shot.fovDegrees) ? shot.fovDegrees : (asset.hasDefaultView ? asset.defaultFovDeg : 45.0)) * M_PI / 180.0;
+    if (shot.explicitCamera) {
+      cam.eye = shot.eye;
+      cam.target = shot.target;
+    } else if (asset.hasDefaultView && std::isnan(shot.azimuth) && std::isnan(shot.elevation)) {
+      cam.eye = asset.defaultEye;
+      cam.target = asset.defaultTarget;
+    } else {
+      const double az = std::isnan(shot.azimuth) ? 0.62 : shot.azimuth;
+      const double el = std::isnan(shot.elevation) ? 0.24 : shot.elevation;
+      const double halfY = cam.fovY * 0.5;
+      const double halfX = std::atan(std::tan(halfY) * aspect);
+      const double radius = diag * 0.5;
+      const double dist = 1.02 * radius / std::sin(std::min(halfY, halfX));
+      const double ce = std::cos(el);
+      cam.target = center;
+      cam.eye = center + bm::Vec3{ce * std::sin(az), std::sin(el), ce * std::cos(az)} * dist;
+    }
+    cam.near = std::max(diag * 2e-4, 0.01);
+    cam.far = std::max(bm::length(center - cam.eye) + diag * 2.0, diag * 4.0);
+
+    if (benchFrames > 0) {
+      constexpr int kWarmUp = 10;
+      std::vector<double> cpu, gpu, total;
+      bmr::FrameStats last;
+      const bm::Vec3 baseEye = cam.eye, baseTarget = cam.target;
+      const bm::Vec3 fwd = bm::normalized(baseTarget - baseEye);
+      const bm::Vec3 rgt = bm::normalized(bm::cross(fwd, bm::Vec3{0, 1, 0}));
+      for (int i = 0; i < kWarmUp + benchFrames; i++) {
+        bmr::Camera c = cam;
+        const double t = static_cast<double>(i) / static_cast<double>(kWarmUp + benchFrames);
+        if (asset.hasDefaultView && !shot.explicitCamera) {
+          // Smooth interactive camera pan through the street/atrium (exercises motion vectors & SVGF!).
+          const double sway = std::sin(t * 2.0 * M_PI) * (diag * 0.008);
+          c.eye = baseEye + rgt * sway;
+          c.target = baseTarget + rgt * (sway * 0.35);
+        } else {
+          const double ang = 2.0 * M_PI * t;
+          const bm::Vec3 rel = baseEye - baseTarget;
+          const double ca = std::cos(ang), sa = std::sin(ang);
+          c.eye = baseTarget + bm::Vec3{rel.x * ca + rel.z * sa, rel.y, -rel.x * sa + rel.z * ca};
+        }
+        last = wr->draw(c, worldOpt);
+        if (i < kWarmUp) continue;
+        cpu.push_back(last.cpuMs);
+        gpu.push_back(last.gpuMs);
+        total.push_back(last.cpuMs + last.gpuMs);
+      }
+      auto json = [](const Spread& s) {
+        char buf[96];
+        std::snprintf(buf, sizeof buf, "{\"p50\":%.3f,\"p95\":%.3f,\"max\":%.3f}", s.p50, s.p95, s.max);
+        return std::string(buf);
+      };
+      const Spread gs = spread(gpu);
+      const double fps = gs.p50 > 0.01 ? 1000.0 / gs.p50 : 0.0;
+      std::printf("{\"world\":true,\"size\":\"%dx%d\",\"triangles\":%llu,\"meshes\":%u,\"textures\":%u,\"loadMs\":%.1f,\"frames\":%d,\"fps\":%.1f,\"cpuMs\":%s,\"gpuMs\":%s,\"frameMs\":%s,\"drawCalls\":%u}\n",
+                  width, height, static_cast<unsigned long long>(wr->triangleCount()), wr->meshCount(), wr->textureCount(),
+                  loadMs, benchFrames, fps, json(spread(cpu)).c_str(), json(gs).c_str(), json(spread(total)).c_str(), last.drawCalls);
+      return kOk;
+    }
+
+    const int draws = rtptFrames > 0 ? rtptFrames : 24;
+    bmr::FrameStats s;
+    for (int d = 0; d < draws; d++) s = wr->draw(cam, worldOpt);
+    if (!bmr::writePng(wr->readback(), out)) {
+      std::fprintf(stderr, "bmshot: cannot write %s\n", out.c_str());
+      return kFailure;
+    }
+    if (stats) {
+      std::printf("{\"world\":true,\"size\":\"%dx%d\",\"triangles\":%llu,\"meshes\":%u,\"textures\":%u,\"loadMs\":%.1f,\"frames\":%d,\"cpuMs\":%.3f,\"gpuMs\":%.3f,\"drawCalls\":%u}\n",
+                  width, height, static_cast<unsigned long long>(wr->triangleCount()), wr->meshCount(), wr->textureCount(),
+                  loadMs, draws, s.cpuMs, s.gpuMs, s.drawCalls);
+    }
+    return kOk;
+  }
+
   const std::string ldraw = bmtools::ldrawDir();
   if (ldraw.empty()) {
     std::fprintf(stderr, "bmshot: no LDraw library found; set BM_LDRAW_DIR\n");
@@ -244,7 +367,7 @@ int main(int argc, char** argv) {
       if (benchFrames > 0) return bench(*renderer, model, benchFrames, width, height, options, &plan, &timeline, frame);
     }
     bmr::FrameStats s;
-    const int draws = options.realtimePathTrace ? rtptFrames : 1;
+    const int draws = options.realtimePathTrace ? std::max(1, rtptFrames) : 1;
     for (int d = 0; d < draws; d++) s = renderer->draw(cameraAt(frame), options);
     if (!bmr::writePng(renderer->readback(), out)) {
       std::fprintf(stderr, "bmshot: cannot write %s\n", out.c_str());

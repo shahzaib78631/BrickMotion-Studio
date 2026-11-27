@@ -41,6 +41,7 @@ struct RtptUniformsGpu {
   simd_uint4 size;
   simd_uint4 flags;
   simd_uint4 params;
+  simd_uint4 outSize;
 };
 
 struct RtptPrevPoseGpu {
@@ -97,7 +98,8 @@ FrameStats Renderer::Impl::drawRealtimePathTraced(const Camera& camera, const Fr
       !pipelines.rtptGbufFloor || !pipelines.rtptPresent || !pipelines.rtptSharcResolve ||
       !pipelines.rtptDirectPass || !pipelines.rtptTraceFloor || !pipelines.rtptTraceOpaque ||
       !pipelines.rtptTraceGlass || !pipelines.rtptSvgfTemporal || !pipelines.rtptSvgfAtrous ||
-      !pipelines.rtptResolveTaa) {
+      !pipelines.rtptSvgfAtrousDiff || !pipelines.rtptResolveTaa || !pipelines.rtptReModulateTrace ||
+      !pipelines.rtptResolveTaau) {
     return stats;
   }
 
@@ -116,12 +118,29 @@ FrameStats Renderer::Impl::drawRealtimePathTraced(const Camera& camera, const Fr
 
   id<MTLDevice> dev = device->device;
 
-  // Allocate/resize GPU targets lazily.
-  if (rtptW != width || rtptH != height || !rtptDepth || !rtptSharcAccum) {
-    auto mkTex = [&](MTLPixelFormat fmt, MTLTextureUsage usage) {
+  // Choose internal trace resolution: 100% native 1:1 up to ~720p (<= 1.1M px), and Quality-mode
+  // sub-pixel Halton TAAU (~1.25M trace px -> full display output) on 1080p / 2x Retina / 4K.
+  double traceScale = 1.0;
+  const double totalPx = static_cast<double>(width) * static_cast<double>(height);
+  if (const char* envScale = std::getenv("BM_RTPT_SCALE")) {
+    const double s = std::atof(envScale);
+    if (s >= 0.4 && s <= 1.0) traceScale = s;
+  } else if (totalPx > 1100000.0) {
+    traceScale = std::clamp(std::sqrt(1250000.0 / totalPx), 0.55, 1.0);
+  }
+  int traceW = width, traceH = height;
+  if (traceScale < 0.995) {
+    traceW = std::clamp(static_cast<int>(std::lround(width * traceScale) + 1) & ~1, std::min(64, width), width);
+    traceH = std::clamp(static_cast<int>(std::lround(height * traceScale) + 1) & ~1, std::min(64, height), height);
+  }
+  const bool taauActive = (traceW < width || traceH < height);
+
+  // Allocate/resize GPU targets lazily (trace buffers at traceW x traceH, TAA output at full width x height).
+  if (rtptW != width || rtptH != height || rtptTraceW != traceW || rtptTraceH != traceH || !rtptDepth || !rtptSharcAccum) {
+    auto mkTex = [&](int tw, int th, MTLPixelFormat fmt, MTLTextureUsage usage) {
       MTLTextureDescriptor* d = [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:fmt
-                                                                                   width:static_cast<NSUInteger>(width)
-                                                                                  height:static_cast<NSUInteger>(height)
+                                                                                   width:static_cast<NSUInteger>(tw)
+                                                                                  height:static_cast<NSUInteger>(th)
                                                                                mipmapped:NO];
       d.usage = usage;
       d.storageMode = MTLStorageModePrivate;
@@ -129,25 +148,40 @@ FrameStats Renderer::Impl::drawRealtimePathTraced(const Camera& camera, const Fr
     };
     const MTLTextureUsage gbufUsage = MTLTextureUsageRenderTarget | MTLTextureUsageShaderRead;
     const MTLTextureUsage rwUsage = MTLTextureUsageShaderRead | MTLTextureUsageShaderWrite;
-    rtptDepth = mkTex(MTLPixelFormatDepth32Float, MTLTextureUsageRenderTarget);
+    rtptDepth = mkTex(traceW, traceH, MTLPixelFormatDepth32Float, MTLTextureUsageRenderTarget);
     for (int i = 0; i < 2; i++) {
-      rtptPosId[i] = mkTex(MTLPixelFormatRGBA32Float, gbufUsage);
-      rtptNorm[i] = mkTex(MTLPixelFormatRGBA16Float, gbufUsage);
-      rtptDiffHist[i] = mkTex(MTLPixelFormatRGBA16Float, rwUsage);
-      rtptSpecHist[i] = mkTex(MTLPixelFormatRGBA16Float, rwUsage);
-      rtptMoments[i] = mkTex(MTLPixelFormatRGBA16Float, rwUsage);
-      rtptHLen[i] = mkTex(MTLPixelFormatRG16Float, rwUsage);
-      rtptTaa[i] = mkTex(MTLPixelFormatRGBA16Float, rwUsage);
+      rtptPosId[i] = mkTex(traceW, traceH, MTLPixelFormatRGBA32Float, gbufUsage);
+      rtptNorm[i] = mkTex(traceW, traceH, MTLPixelFormatRGBA16Float, gbufUsage);
+      rtptDiffHist[i] = mkTex(traceW, traceH, MTLPixelFormatRGBA16Float, rwUsage);
+      rtptSpecHist[i] = mkTex(traceW, traceH, MTLPixelFormatRGBA16Float, rwUsage);
+      rtptMoments[i] = mkTex(traceW, traceH, MTLPixelFormatRGBA16Float, rwUsage);
+      rtptHLen[i] = mkTex(traceW, traceH, MTLPixelFormatRG16Float, rwUsage);
+      rtptTaa[i] = mkTex(width, height, MTLPixelFormatRGBA16Float, rwUsage);
     }
-    rtptMat = mkTex(MTLPixelFormatRGBA16Float, gbufUsage);
-    rtptMotion = mkTex(MTLPixelFormatRGBA16Float, gbufUsage);
-    rtptDi = mkTex(MTLPixelFormatRGBA16Float, rwUsage);
-    rtptDiffRaw = mkTex(MTLPixelFormatRGBA16Float, rwUsage);
-    rtptSpecRaw = mkTex(MTLPixelFormatRGBA16Float, rwUsage);
-    rtptDiffPing = mkTex(MTLPixelFormatRGBA16Float, rwUsage);
-    rtptSpecPing = mkTex(MTLPixelFormatRGBA16Float, rwUsage);
-    rtptDiffPong = mkTex(MTLPixelFormatRGBA16Float, rwUsage);
-    rtptSpecPong = mkTex(MTLPixelFormatRGBA16Float, rwUsage);
+    rtptMat = mkTex(traceW, traceH, MTLPixelFormatRGBA8Unorm, gbufUsage);
+    rtptMotion = mkTex(traceW, traceH, MTLPixelFormatRG16Float, gbufUsage);
+    rtptDi = mkTex(traceW, traceH, MTLPixelFormatRGBA16Float, rwUsage);
+    rtptDiffRaw = mkTex(traceW, traceH, MTLPixelFormatRGBA16Float, rwUsage);
+    rtptSpecRaw = mkTex(traceW, traceH, MTLPixelFormatRGBA16Float, rwUsage);
+    rtptDiffPing = mkTex(traceW, traceH, MTLPixelFormatRGBA16Float, rwUsage);
+    rtptSpecPing = mkTex(traceW, traceH, MTLPixelFormatRGBA16Float, rwUsage);
+    rtptDiffPong = mkTex(traceW, traceH, MTLPixelFormatRGBA16Float, rwUsage);
+
+    const NSUInteger tilesX = static_cast<NSUInteger>((traceW + 7) / 8);
+    const NSUInteger tilesY = static_cast<NSUInteger>((traceH + 7) / 8);
+    const NSUInteger tileBytes = std::max<NSUInteger>(tilesX * tilesY * sizeof(uint32_t), 16);
+    rtptGlassTiles = [dev newBufferWithLength:tileBytes options:MTLResourceStorageModePrivate];
+    rtptOpaqueTiles = [dev newBufferWithLength:tileBytes options:MTLResourceStorageModePrivate];
+    rtptFloorTiles = [dev newBufferWithLength:tileBytes options:MTLResourceStorageModePrivate];
+    if (!rtptTileIndirect) {
+      const uint32_t initArgs[12] = {
+          0u, 1u, 1u, 0u,  // offset  0: glassTiles
+          0u, 1u, 1u, 0u,  // offset 16: opaqueTiles
+          0u, 1u, 1u, 0u,  // offset 32: floorTiles
+      };
+      rtptTileIndirectZero = [dev newBufferWithBytes:initArgs length:sizeof(initArgs) options:MTLResourceStorageModeShared];
+      rtptTileIndirect = [dev newBufferWithLength:sizeof(initArgs) options:MTLResourceStorageModePrivate];
+    }
 
     if (!rtptSharcAccum) {
       rtptSharcAccum = [dev newBufferWithLength:kRtptSharcCap * sizeof(RtptSharcAccumGpu) options:MTLResourceStorageModePrivate];
@@ -162,12 +196,14 @@ FrameStats Renderer::Impl::drawRealtimePathTraced(const Camera& camera, const Fr
     }
     rtptW = width;
     rtptH = height;
+    rtptTraceW = traceW;
+    rtptTraceH = traceH;
     rtptHasHistory = false;
     rtptStillFrames = 0;
   }
 
   // Cull visible instances (reusing standard frustum + LOD culling so picking stays exact).
-  cullInto(inView, scene, parts, camera, height, options.forceDetail, options.cull, false);
+  cullInto(inView, scene, parts, camera, traceH, options.forceDetail, options.cull, false);
   auto& list = nextList;
   auto& seen = nextSeen;
   list.clear();
@@ -271,16 +307,17 @@ FrameStats Renderer::Impl::drawRealtimePathTraced(const Camera& camera, const Fr
   }
   id<MTLBuffer> prevPoseBuf = (rtptHasPrevPose && rtptPrevPoseSlot >= 0) ? rtptPoses[rtptPrevPoseSlot] : rtptPoses[curPoseSlot];
 
-  // Halton(2, 3) subpixel jitter over 16 positions for crisp temporal anti-aliasing & supersampling.
-  const uint32_t jitterIdx = (rtptFrameIdx % 16u) + 1u;
+  // Halton(2, 3) subpixel jitter (16x native, 32x under TAAU for dense sub-pixel reconstruction!).
+  const uint32_t jitterPeriod = taauActive ? 32u : 16u;
+  const uint32_t jitterIdx = (rtptFrameIdx % jitterPeriod) + 1u;
   const float jx = (rtptFrameIdx == 0u && !rtptHasHistory) ? 0.0f : (halton(jitterIdx, 2u) - 0.5f);
   const float jy = (rtptFrameIdx == 0u && !rtptHasHistory) ? 0.0f : (halton(jitterIdx, 3u) - 0.5f);
 
   const Mat4 view = viewMatrix(camera, scene.origin);
   const Mat4 proj = projectionMatrix(camera);
   Mat4 projJittered = proj;
-  const float dxNdc = (2.0f * jx) / static_cast<float>(width);
-  const float dyNdc = (-2.0f * jy) / static_cast<float>(height);
+  const float dxNdc = (2.0f * jx) / static_cast<float>(traceW);
+  const float dyNdc = (-2.0f * jy) / static_cast<float>(traceH);
   if (camera.orthoHalfHeight > 0) {
     projJittered.m[12] += dxNdc;
     projJittered.m[13] += dyNdc;
@@ -328,10 +365,11 @@ FrameStats Renderer::Impl::drawRealtimePathTraced(const Camera& camera, const Fr
   ru.jitter = simd_make_float4(jx, jy, rtptPrevJitter[0], rtptPrevJitter[1]);
   const simd_float3 accent = simd_make_float3(linearFromSrgb(kSelectionRgb[0]), linearFromSrgb(kSelectionRgb[1]), linearFromSrgb(kSelectionRgb[2]));
   ru.selection = simd_make_float4(accent.x, accent.y, accent.z, selected.empty() ? 0.0f : kSelectionWidth);
-  ru.size = simd_make_uint4(static_cast<uint32_t>(width), static_cast<uint32_t>(height), rtptFrameIdx, rtptStillFrames);
+  ru.size = simd_make_uint4(static_cast<uint32_t>(traceW), static_cast<uint32_t>(traceH), rtptFrameIdx, rtptStillFrames);
   ru.flags = simd_make_uint4(ps.instances != nil ? 1u : 0u, rtptHasHistory ? 1u : 0u, geoMoved ? 1u : 0u, hasPlaceholders ? 1u : 0u);
   const uint32_t maxSamples = static_cast<uint32_t>(std::max(1, options.pathMaxSamples));
   ru.params = simd_make_uint4(maxSamples, 1u, (geoMoved && rtptHasPrevPose && prevPoseBuf != nil) ? 1u : 0u, pieceCount);
+  ru.outSize = simd_make_uint4(static_cast<uint32_t>(width), static_cast<uint32_t>(height), taauActive ? 1u : 0u, 0u);
 
   // Fill DrawUniforms and visible instance index buffer.
   const size_t batchCount = std::max<size_t>(1, seen.size());
@@ -357,7 +395,6 @@ FrameStats Renderer::Impl::drawRealtimePathTraced(const Camera& camera, const Fr
   // Ping-pong indices for temporal textures.
   const int cur = static_cast<int>(rtptFrameIdx & 1u);
   const int prev = cur ^ 1;
-  const MTLSize grid = MTLSizeMake(static_cast<NSUInteger>(width), static_cast<NSUInteger>(height), 1);
   const MTLSize tg = MTLSizeMake(8, 8, 1);
 
   id<MTLCommandBuffer> commands = [device->queue commandBuffer];
@@ -371,11 +408,14 @@ FrameStats Renderer::Impl::drawRealtimePathTraced(const Camera& camera, const Fr
     commands = [device->queue commandBuffer];
   };
 
-  // Reset SHaRC table cleanly on look switches (e.g. clay/background change).
-  if (lookChanged) {
+  // Reset indirect tile counters (and SHaRC table on look switches) in one tiny blit pass.
+  {
     id<MTLBlitCommandEncoder> blit = [commands blitCommandEncoder];
-    [blit fillBuffer:rtptSharcAccum range:NSMakeRange(0, rtptSharcAccum.length) value:0];
-    [blit fillBuffer:rtptSharcResolved range:NSMakeRange(0, rtptSharcResolved.length) value:0];
+    [blit copyFromBuffer:rtptTileIndirectZero sourceOffset:0 toBuffer:rtptTileIndirect destinationOffset:0 size:48];
+    if (lookChanged) {
+      [blit fillBuffer:rtptSharcAccum range:NSMakeRange(0, rtptSharcAccum.length) value:0];
+      [blit fillBuffer:rtptSharcResolved range:NSMakeRange(0, rtptSharcResolved.length) value:0];
+    }
     [blit endEncoding];
   }
 
@@ -497,12 +537,20 @@ FrameStats Renderer::Impl::drawRealtimePathTraced(const Camera& camera, const Fr
 
   // ---- PASSES 3, 4, 5, 6: Compute Pipeline ----
   {
+    const MTLSize traceGrid = MTLSizeMake(static_cast<NSUInteger>(traceW), static_cast<NSUInteger>(traceH), 1);
+    const MTLSize traceTgGrid = MTLSizeMake((static_cast<NSUInteger>(traceW) + 7) / 8,
+                                            (static_cast<NSUInteger>(traceH) + 7) / 8, 1);
+    const MTLSize outGrid = MTLSizeMake(static_cast<NSUInteger>(width), static_cast<NSUInteger>(height), 1);
     id<MTLComputeCommandEncoder> ce = [commands computeCommandEncoder];
 
-    // Pass 3: Exact Analytical Adaptive Control-Variate Studio Direct Lighting (0 bias, 0 noise on sunlit faces)
+    // Pass 3: Exact Analytical Adaptive Control-Variate Direct Lighting + 8x8 Material Tile Classification
     [ce setComputePipelineState:pipelines.rtptDirectPass];
     [ce setBytes:&ru length:sizeof(ru) atIndex:0];
     bindScene(ce);
+    [ce setBuffer:rtptTileIndirect offset:0 atIndex:5];
+    [ce setBuffer:rtptGlassTiles offset:0 atIndex:6];
+    [ce setBuffer:rtptOpaqueTiles offset:0 atIndex:7];
+    [ce setBuffer:rtptFloorTiles offset:0 atIndex:8];
     [ce setTexture:rtptPosId[cur] atIndex:0];
     [ce setTexture:rtptNorm[cur] atIndex:1];
     [ce setTexture:rtptMotion atIndex:2];
@@ -510,49 +558,53 @@ FrameStats Renderer::Impl::drawRealtimePathTraced(const Camera& camera, const Fr
     [ce setTexture:rtptNorm[prev] atIndex:4];
     [ce setTexture:rtptDiffHist[prev] atIndex:5];
     [ce setTexture:rtptDi atIndex:6];
-    [ce dispatchThreads:grid threadsPerThreadgroup:tg];
+    [ce dispatchThreadgroups:traceTgGrid threadsPerThreadgroup:tg];
     if (profile) { [ce endEncoding]; submitStage("3_direct_cv"); ce = [commands computeCommandEncoder]; }
 
-    // Pass 4a: Full-Resolution Adaptive Control-Variate Floor Shadow Catcher (razor-sharp contact creases!)
+    // Pass 4a: Indirect Tile-Compacted Adaptive Control-Variate Floor Shadow Catcher
     if (options.floor) {
       [ce setComputePipelineState:pipelines.rtptTraceFloor];
       [ce setBytes:&ru length:sizeof(ru) atIndex:0];
       bindScene(ce);
+      [ce setBuffer:rtptFloorTiles offset:0 atIndex:5];
       [ce setTexture:rtptPosId[cur] atIndex:0];
       [ce setTexture:rtptMotion atIndex:1];
       [ce setTexture:rtptPosId[prev] atIndex:2];
       [ce setTexture:rtptDiffHist[prev] atIndex:3];
       [ce setTexture:rtptDiffRaw atIndex:4];
-      [ce dispatchThreads:grid threadsPerThreadgroup:tg];
+      [ce dispatchThreadgroupsWithIndirectBuffer:rtptTileIndirect indirectBufferOffset:32 threadsPerThreadgroup:tg];
       if (profile) { [ce endEncoding]; submitStage("4a_trace_floor"); ce = [commands computeCommandEncoder]; }
     }
 
-    // Pass 4b: Specialized Opaque Brick GI (+ Fine SHaRC + 2nd-Bounce) + Separate Deterministic Clearcoat & Base VNDF Specular
+    // Pass 4b: Indirect Tile-Compacted Opaque Brick GI (+ Fine SHaRC) + Energy-Matched Glossy VNDF Specular
     [ce setComputePipelineState:pipelines.rtptTraceOpaque];
     [ce setBytes:&ru length:sizeof(ru) atIndex:0];
     bindScene(ce);
     [ce setBuffer:rtptSharcResolved offset:0 atIndex:5];
     [ce setBuffer:rtptSharcAccum offset:0 atIndex:6];
+    [ce setBuffer:rtptOpaqueTiles offset:0 atIndex:7];
     [ce setTexture:rtptPosId[cur] atIndex:0];
     [ce setTexture:rtptNorm[cur] atIndex:1];
     [ce setTexture:rtptMat atIndex:2];
-    [ce setTexture:rtptMotion atIndex:3];
-    [ce setTexture:rtptDi atIndex:4];
-    [ce setTexture:rtptDiffRaw atIndex:5];
-    [ce setTexture:rtptSpecRaw atIndex:6];
-    [ce dispatchThreads:grid threadsPerThreadgroup:tg];
+    [ce setTexture:rtptDi atIndex:3];
+    [ce setTexture:rtptDiffRaw atIndex:4];
+    [ce setTexture:rtptSpecRaw atIndex:5];
+    [ce dispatchThreadgroupsWithIndirectBuffer:rtptTileIndirect indirectBufferOffset:16 threadsPerThreadgroup:tg];
     if (profile) { [ce endEncoding]; submitStage("4b_trace_opaque"); ce = [commands computeCommandEncoder]; }
 
-    // Pass 4c: Specialized Deterministic-Fresnel 16-Bounce Dielectric Glass RT (dispatched ONLY when glass is in view!)
+    // Pass 4c: Indirect Tile-Compacted Dielectric Glass RT (dispatches ONLY on tiles containing glass!)
     if (glassInView) {
       [ce setComputePipelineState:pipelines.rtptTraceGlass];
       [ce setBytes:&ru length:sizeof(ru) atIndex:0];
       bindScene(ce);
       [ce setBuffer:rtptSharcResolved offset:0 atIndex:5];
       [ce setBuffer:rtptSharcAccum offset:0 atIndex:6];
+      [ce setBuffer:rtptGlassTiles offset:0 atIndex:7];
       [ce setTexture:rtptPosId[cur] atIndex:0];
-      [ce setTexture:rtptSpecRaw atIndex:1];
-      [ce dispatchThreads:grid threadsPerThreadgroup:tg];
+      [ce setTexture:rtptNorm[cur] atIndex:1];
+      [ce setTexture:rtptMat atIndex:2];
+      [ce setTexture:rtptSpecRaw atIndex:3];
+      [ce dispatchThreadgroupsWithIndirectBuffer:rtptTileIndirect indirectBufferOffset:0 threadsPerThreadgroup:tg];
       if (profile) { [ce endEncoding]; submitStage("4c_trace_glass"); ce = [commands computeCommandEncoder]; }
     }
 
@@ -564,7 +616,7 @@ FrameStats Renderer::Impl::drawRealtimePathTraced(const Camera& camera, const Fr
     [ce dispatchThreads:MTLSizeMake(kRtptSharcCap, 1, 1) threadsPerThreadgroup:MTLSizeMake(64, 1, 1)];
     if (profile) { [ce endEncoding]; submitStage("2b_sharc_resolve"); ce = [commands computeCommandEncoder]; }
 
-    // Pass 5a: Demodulated SVGF Temporal Accumulation + Variance Estimation
+    // Pass 5a: 2D-Morton L2-Coherent Demodulated SVGF Temporal Accumulation + Variance Estimation
     [ce setComputePipelineState:pipelines.rtptSvgfTemporal];
     [ce setBytes:&ru length:sizeof(ru) atIndex:0];
     [ce setTexture:rtptPosId[cur] atIndex:0];
@@ -582,50 +634,82 @@ FrameStats Renderer::Impl::drawRealtimePathTraced(const Camera& camera, const Fr
     [ce setTexture:rtptSpecHist[cur] atIndex:12];
     [ce setTexture:rtptMoments[cur] atIndex:13];
     [ce setTexture:rtptHLen[cur] atIndex:14];
-    [ce dispatchThreads:grid threadsPerThreadgroup:tg];
+    [ce dispatchThreads:traceGrid threadsPerThreadgroup:tg];
     if (profile) { [ce endEncoding]; submitStage("5a_svgf_temporal"); ce = [commands computeCommandEncoder]; }
 
-    // Pass 5b: 4-Pass 5-Tap Alternating Cross/Diagonal Plane-Distance A-Trous Denoiser (skips glass & sharp sheen!)
+    // Pass 5b: Pass 0 filters Diff + Spec (step 1); Passes 1..N run lightweight Diff-Only A-Trous (steps 2, 4, 8)
+    // with zero-gPosId floor neighbor filtering and 2D Morton L2 texture cache locality!
     id<MTLTexture> diffSrc = rtptDiffHist[cur];
-    id<MTLTexture> specSrc = rtptSpecHist[cur];
     id<MTLTexture> diffDst = rtptDiffPing;
-    id<MTLTexture> specDst = rtptSpecPing;
     const uint32_t steps[4] = {1u, 2u, 4u, 8u};
+    const int numPasses = (rtptStillFrames >= 48u) ? 2 : (rtptStillFrames >= 24u ? 3 : 4);
+    ru.params.y = steps[0];
     [ce setComputePipelineState:pipelines.rtptSvgfAtrous];
-    [ce setTexture:rtptPosId[cur] atIndex:0];
-    [ce setTexture:rtptNorm[cur] atIndex:1];
-    [ce setTexture:rtptMat atIndex:2];
-    [ce setTexture:rtptMoments[cur] atIndex:5];
-    [ce setTexture:rtptHLen[cur] atIndex:6];
-    for (int p = 0; p < 4; p++) {
-      ru.params.y = steps[p] | (static_cast<uint32_t>(p) << 16u);
-      [ce setBytes:&ru length:sizeof(ru) atIndex:0];
-      [ce setTexture:diffSrc atIndex:3];
-      [ce setTexture:specSrc atIndex:4];
-      [ce setTexture:diffDst atIndex:7];
-      [ce setTexture:specDst atIndex:8];
-      [ce dispatchThreads:grid threadsPerThreadgroup:tg];
-      diffSrc = diffDst;
-      specSrc = specDst;
-      diffDst = ((p & 1) == 0) ? rtptDiffPong : rtptDiffPing;
-      specDst = ((p & 1) == 0) ? rtptSpecPong : rtptSpecPing;
-    }
-    if (profile) { [ce endEncoding]; submitStage("5b_svgf_atrous"); ce = [commands computeCommandEncoder]; }
-
-    // Pass 6a: Cooperative Threadgroup-SRAM BRDF Re-Modulation + Halton TAA / Unbiased Cesaro Progressive Resolve
-    [ce setComputePipelineState:pipelines.rtptResolveTaa];
     [ce setBytes:&ru length:sizeof(ru) atIndex:0];
     [ce setTexture:rtptPosId[cur] atIndex:0];
     [ce setTexture:rtptNorm[cur] atIndex:1];
     [ce setTexture:rtptMat atIndex:2];
-    [ce setTexture:rtptMotion atIndex:3];
-    [ce setTexture:diffSrc atIndex:4];
-    [ce setTexture:specSrc atIndex:5];
-    [ce setTexture:rtptTaa[prev] atIndex:6];
-    [ce setTexture:rtptTaa[cur] atIndex:7];
-    [ce dispatchThreadgroups:MTLSizeMake((static_cast<NSUInteger>(width) + 7) / 8,
-                                         (static_cast<NSUInteger>(height) + 7) / 8, 1)
-        threadsPerThreadgroup:tg];
+    [ce setTexture:diffSrc atIndex:3];
+    [ce setTexture:rtptSpecHist[cur] atIndex:4];
+    [ce setTexture:rtptMoments[cur] atIndex:5];
+    [ce setTexture:rtptHLen[cur] atIndex:6];
+    [ce setTexture:diffDst atIndex:7];
+    [ce setTexture:rtptSpecPing atIndex:8];
+    [ce dispatchThreads:traceGrid threadsPerThreadgroup:tg];
+    diffSrc = diffDst;
+    diffDst = rtptDiffPong;
+
+    if (numPasses > 1) {
+      [ce setComputePipelineState:pipelines.rtptSvgfAtrousDiff];
+      [ce setTexture:rtptPosId[cur] atIndex:0];
+      [ce setTexture:rtptNorm[cur] atIndex:1];
+      [ce setTexture:rtptMoments[cur] atIndex:3];
+      [ce setTexture:rtptHLen[cur] atIndex:4];
+      for (int p = 1; p < numPasses; p++) {
+        ru.params.y = steps[p] | (static_cast<uint32_t>(p) << 16u);
+        [ce setBytes:&ru length:sizeof(ru) atIndex:0];
+        [ce setTexture:diffSrc atIndex:2];
+        [ce setTexture:diffDst atIndex:5];
+        [ce dispatchThreads:traceGrid threadsPerThreadgroup:tg];
+        diffSrc = diffDst;
+        diffDst = ((p & 1) == 0) ? rtptDiffPong : rtptDiffPing;
+      }
+    }
+    if (profile) { [ce endEncoding]; submitStage("5b_svgf_atrous"); ce = [commands computeCommandEncoder]; }
+
+    // Pass 6a: Native SRAM TAA (1:1) OR Sub-Pixel Halton TAAU (traceW x traceH -> full width x height!)
+    if (!taauActive) {
+      [ce setComputePipelineState:pipelines.rtptResolveTaa];
+      [ce setBytes:&ru length:sizeof(ru) atIndex:0];
+      [ce setTexture:rtptPosId[cur] atIndex:0];
+      [ce setTexture:rtptNorm[cur] atIndex:1];
+      [ce setTexture:rtptMat atIndex:2];
+      [ce setTexture:rtptMotion atIndex:3];
+      [ce setTexture:diffSrc atIndex:4];
+      [ce setTexture:rtptSpecPing atIndex:5];
+      [ce setTexture:rtptTaa[prev] atIndex:6];
+      [ce setTexture:rtptTaa[cur] atIndex:7];
+      [ce dispatchThreadgroups:traceTgGrid threadsPerThreadgroup:tg];
+    } else {
+      // Re-modulate once per trace pixel into dead rtptDiffRaw (zero extra VRAM!), then resolve at full display res!
+      [ce setComputePipelineState:pipelines.rtptReModulateTrace];
+      [ce setBytes:&ru length:sizeof(ru) atIndex:0];
+      [ce setTexture:rtptPosId[cur] atIndex:0];
+      [ce setTexture:rtptNorm[cur] atIndex:1];
+      [ce setTexture:rtptMat atIndex:2];
+      [ce setTexture:diffSrc atIndex:3];
+      [ce setTexture:rtptSpecPing atIndex:4];
+      [ce setTexture:rtptDiffRaw atIndex:5];
+      [ce dispatchThreads:traceGrid threadsPerThreadgroup:tg];
+
+      [ce setComputePipelineState:pipelines.rtptResolveTaau];
+      [ce setBytes:&ru length:sizeof(ru) atIndex:0];
+      [ce setTexture:rtptDiffRaw atIndex:0];
+      [ce setTexture:rtptMotion atIndex:1];
+      [ce setTexture:rtptTaa[prev] atIndex:2];
+      [ce setTexture:rtptTaa[cur] atIndex:3];
+      [ce dispatchThreads:outGrid threadsPerThreadgroup:tg];
+    }
     [ce endEncoding];
     submitStage("6a_resolve_taa");
   }

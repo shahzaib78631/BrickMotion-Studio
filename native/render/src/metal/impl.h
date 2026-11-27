@@ -122,7 +122,7 @@ struct Pipelines {
   id<MTLRenderPipelineState> height = nil, brick = nil, glass = nil, glassDepth = nil, glassPreview = nil, transparent = nil, floor = nil, edges = nil, shadow = nil, composite = nil, mask = nil, ids = nil, ao = nil, aoBlur = nil, sspt = nil, ssptBlur = nil, rmidtFront = nil, rmidtBack = nil, rmidtResolve = nil, pathResolve = nil, lens = nil;
   id<MTLRenderPipelineState> rtptGbufOpaque = nil, rtptGbufGlass = nil, rtptGbufFloor = nil, rtptPresent = nil;
   id<MTLComputePipelineState> pathTrace = nil, hybridRtGlass = nil, hybridRtGiRefl = nil, hybridRtTemporal = nil, neuralFeatures = nil, neuralInfer = nil;
-  id<MTLComputePipelineState> rtptSharcResolve = nil, rtptDirectPass = nil, rtptTraceFloor = nil, rtptTraceOpaque = nil, rtptTraceGlass = nil, rtptSvgfTemporal = nil, rtptSvgfAtrous = nil, rtptResolveTaa = nil;
+  id<MTLComputePipelineState> rtptSharcResolve = nil, rtptDirectPass = nil, rtptTraceFloor = nil, rtptTraceOpaque = nil, rtptTraceGlass = nil, rtptSvgfTemporal = nil, rtptSvgfAtrous = nil, rtptSvgfAtrousDiff = nil, rtptResolveTaa = nil, rtptReModulateTrace = nil, rtptResolveTaau = nil;
   id<MTLDepthStencilState> depthWrite = nil, depthWriteLess = nil, depthRead = nil, depthNone = nil, shadowDepth = nil;
   id<MTLSamplerState> smooth = nil, shadowSampler = nil;
   bool ok = false;
@@ -256,14 +256,17 @@ struct Renderer::Impl {
   id<MTLTexture> rtptDiffRaw = nil, rtptSpecRaw = nil;
   id<MTLTexture> rtptDiffHist[2] = {nil, nil}, rtptSpecHist[2] = {nil, nil};
   id<MTLTexture> rtptMoments[2] = {nil, nil}, rtptHLen[2] = {nil, nil};
-  id<MTLTexture> rtptDiffPing = nil, rtptSpecPing = nil, rtptDiffPong = nil, rtptSpecPong = nil;
+  id<MTLTexture> rtptDiffPing = nil, rtptSpecPing = nil, rtptDiffPong = nil;
   id<MTLTexture> rtptTaa[2] = {nil, nil};
   id<MTLBuffer> rtptSharcAccum = nil, rtptSharcResolved = nil;
+  id<MTLBuffer> rtptTileIndirect = nil, rtptTileIndirectZero = nil;
+  id<MTLBuffer> rtptGlassTiles = nil, rtptOpaqueTiles = nil, rtptFloorTiles = nil;
   id<MTLBuffer> rtptPoses[3] = {nil, nil, nil};
   uint32_t rtptPoseCapacity = 0;
   int rtptPrevPoseSlot = -1;
   bool rtptHasPrevPose = false;
   int rtptW = 0, rtptH = 0;
+  int rtptTraceW = 0, rtptTraceH = 0;
   uint32_t rtptFrameIdx = 0;
   uint32_t rtptStillFrames = 0;
   bool rtptHasHistory = false;
