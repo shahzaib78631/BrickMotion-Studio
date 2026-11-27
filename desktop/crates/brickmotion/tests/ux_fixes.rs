@@ -531,3 +531,28 @@ fn no_coming_soon_placeholders() {
     assert!(h.query_by_label("Preferences").is_none(), "disabled Preferences button");
     assert!(h.query_by_label("Help").is_none(), "disabled Help button");
 }
+
+#[test]
+fn split_grown_units_switch_sets_the_clean_grown_plan_option() {
+    use egui::accesskit::Role;
+    // Tall enough that Build Settings' folded Advanced group is on screen without scrolling.
+    let mut h = Harness::builder().with_size([1440.0, 1800.0]).build_eframe(|cc| {
+        let mut app = BrickMotionApp::new_for_test_cc(cc, Some(HELI.into()));
+        app.wait_loaded();
+        app.dialogs_off();
+        app.prefs.auto_plan = false;
+        app
+    });
+    h.run_steps(3);
+    run(h.state_mut(), "model.build_settings");
+    h.run_steps(3);
+    assert!(!h.state().session().build_settings().clean_grown_units, "off by default, as bm plan");
+    h.get_by_role_and_label(Role::Button, "Advanced").click();
+    h.run_steps(3);
+    h.get_by_role_and_label(Role::Switch, "Split grown units").click();
+    h.run_steps(3);
+    assert!(h.state().session().build_settings().clean_grown_units, "--clean-grown");
+    h.get_by_role_and_label(Role::Switch, "Split grown units").click();
+    h.run_steps(3);
+    assert!(!h.state().session().build_settings().clean_grown_units, "--no-clean-grown");
+}
