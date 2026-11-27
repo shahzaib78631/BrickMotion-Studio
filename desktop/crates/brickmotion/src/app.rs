@@ -218,6 +218,8 @@ pub struct BrickMotionApp {
     pub properties_page: chrome::properties::Page,
     /// The axis and pivot of an open Transform scrub.
     pub(crate) transform_gesture: Option<chrome::transform::Gesture>,
+    /// Home's sample pictures.
+    pub(crate) thumbnails: crate::thumbnails::Thumbnails,
     /// Fit Together's search, keyed by (generation, version, [target, moving]).
     fit_job: crate::workers::Job<FitKey, Vec<bm::Pose>>,
     fit_key: Option<FitKey>,
@@ -343,6 +345,7 @@ impl BrickMotionApp {
             timeline: chrome::timeline::TimelineState::default(),
             properties_page: chrome::properties::Page::Inspector,
             transform_gesture: None,
+            thumbnails: Default::default(),
             fit_job: Default::default(),
             fit_key: None,
             build_settings: chrome::build_settings::BuildSettingsState::default(),
@@ -442,6 +445,12 @@ impl BrickMotionApp {
                 self.edited(c);
             }
         }
+    }
+
+    #[doc(hidden)]
+    pub fn home_thumbnails_ready(&self) -> usize {
+        let b = self.theme.bg2;
+        self.thumbnails.ready_count([b.r(), b.g(), b.b()])
     }
 
     #[doc(hidden)]

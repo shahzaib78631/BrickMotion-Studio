@@ -27,6 +27,7 @@ mod snapshot;
 pub mod sound;
 pub mod support;
 pub mod theme;
+pub mod thumbnails;
 mod theme_catalogue;
 pub mod transport;
 pub mod viewport;

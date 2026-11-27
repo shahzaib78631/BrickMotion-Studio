@@ -132,6 +132,13 @@ fn p2_screenshots() {
             home.run_steps(3);
             let ctx = home.ctx.clone();
             home.state_mut().set_theme(&ctx, theme);
+            // Wait for the sample pictures (drawn on a worker, one after another).
+            let want = brickmotion::chrome::home::samples().len();
+            let deadline = std::time::Instant::now() + std::time::Duration::from_secs(180);
+            while home.state().home_thumbnails_ready() < want && std::time::Instant::now() < deadline {
+                home.run_steps(1);
+                std::thread::sleep(std::time::Duration::from_millis(50));
+            }
             home.run_steps(4);
             home.render().unwrap().save(out.join(format!("p2-home-{theme}.png"))).unwrap();
             run(h.state_mut(), "app.settings");

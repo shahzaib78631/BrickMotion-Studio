@@ -690,7 +690,16 @@ impl ViewportWidget {
                 if let Some((a, _)) = self.marquee.take() {
                     gizmo_consumed_primary = true;
                     let b = latest_pos.unwrap_or(a);
-                    let found = doc.viewport().map(|vp| vp.marquee(to_bm(a), to_bm(b), false)).unwrap_or_default();
+                    // The release carries the modifiers held as the box was let go: ⇧ adds, and ⌥
+                    // also takes pieces the box only touches (Swift's marquee).
+                    let held = ui.input(|i| {
+                        i.events.iter().rev().find_map(|ev| match ev {
+                            egui::Event::PointerButton { button: egui::PointerButton::Primary, pressed: false, modifiers, .. } => Some(*modifiers),
+                            _ => None,
+                        })
+                    });
+                    let held = held.unwrap_or(modifiers);
+                    let found = doc.viewport().map(|vp| vp.marquee(to_bm(a), to_bm(b), held.alt)).unwrap_or_default();
                     let mut pieces: Vec<u32> = Vec::new();
                     let mut seen = std::collections::HashSet::new();
                     for p in found {
@@ -700,14 +709,7 @@ impl ViewportWidget {
                             }
                         }
                     }
-                    // The release carries the modifiers held as the box was let go.
-                    let shift = ui.input(|i| {
-                        i.events.iter().rev().find_map(|ev| match ev {
-                            egui::Event::PointerButton { button: egui::PointerButton::Primary, pressed: false, modifiers, .. } => Some(modifiers.shift),
-                            _ => None,
-                        })
-                    });
-                    let mode = if shift.unwrap_or(modifiers.shift) { bm::SelectMode::Add } else { bm::SelectMode::Replace };
+                    let mode = if held.shift { bm::SelectMode::Add } else { bm::SelectMode::Replace };
                     doc.session().select(&pieces, mode);
                     changed = true;
                 }
@@ -862,7 +864,15 @@ impl ViewportWidget {
 
         if let Some((a, b)) = self.marquee {
             let r = Rect::from_two_pos(a, b).intersect(rect);
-            ui.painter().rect(r, 0.0, theme.accent_a(30), egui::Stroke::new(1.0, theme.accent), egui::StrokeKind::Inside);
+            ui.painter().rect_filled(r, 0.0, theme.accent_a(30));
+            let stroke = egui::Stroke::new(1.0, theme.accent);
+            if modifiers.alt {
+                // Dashed: ⌥ takes pieces the box only touches.
+                let c = [r.left_top(), r.right_top(), r.right_bottom(), r.left_bottom(), r.left_top()];
+                ui.painter().extend(egui::Shape::dashed_line(&c, stroke, 4.0, 3.0));
+            } else {
+                ui.painter().rect_stroke(r, 0.0, stroke, egui::StrokeKind::Inside);
+            }
         }
 
         // Refresh and paint the gizmo after any camera/selection change this frame.

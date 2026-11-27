@@ -177,10 +177,16 @@ fn page(ui: &mut Ui, app: &mut BrickMotionApp, t: &Theme) {
         let cols = 5;
         let sw = ((ui.available_width() - 12.0 * (cols as f32 - 1.0)) / cols as f32).floor();
         let mut open = None;
+        let bg = [t.bg2.r(), t.bg2.g(), t.bg2.b()];
+        let ctx = ui.ctx().clone();
         ui.horizontal_wrapped(|ui| {
             ui.spacing_mut().item_spacing = vec2(12.0, 12.0);
             for (title, path) in &samples {
-                if sample_card(ui, t, sw, title) {
+                let thumb = match app.thumbnails.get(&ctx, &app.support, path, bg) {
+                    crate::thumbnails::Thumb::Ready(tex) => Some(tex),
+                    _ => None,
+                };
+                if sample_card(ui, t, sw, title, thumb.as_ref()) {
                     open = Some(path.clone());
                 }
             }
@@ -222,14 +228,29 @@ fn recent_row(ui: &mut Ui, t: &Theme, path: &Path) -> bool {
     resp.on_hover_cursor(egui::CursorIcon::PointingHand).clicked()
 }
 
-fn sample_card(ui: &mut Ui, t: &Theme, w: f32, title: &str) -> bool {
+/// A sample: its picture (the brick icon until it is drawn) and its title under it.
+fn sample_card(ui: &mut Ui, t: &Theme, w: f32, title: &str, thumb: Option<&egui::TextureHandle>) -> bool {
     let (r, resp) = ui.allocate_exact_size(vec2(w, 112.0), Sense::click());
     resp.widget_info(|| WidgetInfo::labeled(egui::Role::Button, true, title));
-    let p = ui.painter();
     let art = Rect::from_min_size(r.min, vec2(w, 80.0));
     let ring = if resp.hovered() { t.text3 } else { t.border };
-    p.rect(art, CornerRadius::same(10), t.bg2, Stroke::new(1.0, ring), StrokeKind::Inside);
-    icons::paint(ui, Icon::Brick, Rect::from_center_size(art.center(), vec2(28.0, 28.0)), 28.0, t.text3);
+    ui.painter().rect_filled(art, CornerRadius::same(10), t.bg2);
+    match thumb {
+        Some(tex) => {
+            // Fill the card, cropping the picture's sides or top to keep its shape.
+            let ts = tex.size_vec2();
+            let (aw, ah) = (art.width() / ts.x, art.height() / ts.y);
+            let s = aw.max(ah);
+            let (u, v) = ((1.0 - aw / s) / 2.0, (1.0 - ah / s) / 2.0);
+            egui::Image::from_texture(tex)
+                .uv(Rect::from_min_max(pos2(u, v), pos2(1.0 - u, 1.0 - v)))
+                .corner_radius(10)
+                .paint_at(ui, art);
+        }
+        None => icons::paint(ui, Icon::Brick, Rect::from_center_size(art.center(), vec2(28.0, 28.0)), 28.0, t.text3),
+    }
+    let p = ui.painter();
+    p.rect_stroke(art, CornerRadius::same(10), Stroke::new(1.0, ring), StrokeKind::Inside);
     ui.painter().text(pos2(r.left() + 2.0, art.bottom() + 16.0), egui::Align2::LEFT_CENTER, title, egui::FontId::proportional(12.5), t.text1);
     resp.on_hover_cursor(egui::CursorIcon::PointingHand).clicked()
 }

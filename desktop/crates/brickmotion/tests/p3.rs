@@ -273,3 +273,17 @@ fn tree_row_menu_plays_and_lays_out_a_submodel() {
         assert!(c.pitch > 1.5);
     }
 }
+
+#[test]
+fn option_while_dragging_takes_pieces_the_box_only_touches() {
+    let mut h = mixed();
+    let Some(c) = zoomed_out(&mut h) else { return };
+    // A box from far left to the centre line: the middle brick is cut by its edge.
+    let (a, b) = (c + egui::vec2(-150.0, -150.0), c + egui::vec2(0.0, 150.0));
+    drag(&mut h, a, b, egui::PointerButton::Primary, Default::default());
+    let inside = sorted(h.state().session().selection());
+    assert_eq!(inside.len(), 1, "only the end brick is wholly inside: {inside:?}");
+    drag(&mut h, a, b, egui::PointerButton::Primary, egui::Modifiers::ALT);
+    let touching = sorted(h.state().session().selection());
+    assert_eq!(touching, sorted(vec![inside[0], 1]), "⌥ adds the brick the edge crosses");
+}
