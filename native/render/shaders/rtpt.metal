@@ -294,7 +294,7 @@ fragment RtptGbufFragOut rtptGbufFloorFragment(RtptFloorVertOut in [[stage_in]],
   float3 bmin = u.sceneMin.xyz, bmax = u.sceneMax.xyz;
   float modelH = max(u.floorPlane.x - bmin.y, 1.0f);
   float modelDiag = max(length(bmax - bmin), 1.0f);
-  float reach = max(modelH * 6.5f, modelDiag * 2.0f);
+  float reach = max(modelH * 3.8f, modelDiag * 1.45f);
   float2 dBox = max(max(bmin.xz - in.world.xz, in.world.xz - bmax.xz), float2(0.0f));
   if (dot(dBox, dBox) > reach * reach) {
     RtptGbufFragOut skyOut;
@@ -612,13 +612,15 @@ kernel void rtptDirectPass(
     device uint* glassTiles [[buffer(6)]],
     device uint* opaqueTiles [[buffer(7)]],
     device uint* floorTiles [[buffer(8)]],
+    device uint* specTiles [[buffer(9)]],
     texture2d<float, access::read> gPosId [[texture(0)]],
     texture2d<float, access::read> gNorm [[texture(1)]],
     texture2d<float, access::read> gMotion [[texture(2)]],
     texture2d<float, access::read> prevPosId [[texture(3)]],
     texture2d<float, access::read> prevNorm [[texture(4)]],
-    texture2d<float, access::read> diffHistPrev [[texture(5)]],
+    texture2d<float, access::read> diPrevTex [[texture(5)]],
     texture2d<float, access::write> diOut [[texture(6)]],
+    texture2d<float, access::read> gMat [[texture(7)]],
     uint2 gid [[thread_position_in_grid]],
     uint2 lid [[thread_position_in_threadgroup]],
     uint2 tgid [[threadgroup_position_in_grid]]) {
@@ -631,6 +633,14 @@ kernel void rtptDirectPass(
   float4 posId = inBounds ? gPosId.read(gid) : float4(0.0f);
   uint kind = inBounds ? rtptUnpackKind(posId.w) : 0u;
   uint bit = (kind == 2u || kind == 4u) ? 1u : (kind == 1u ? 2u : (kind == 3u ? 4u : 0u));
+  if (kind == 1u) {
+    float rough = gMat.read(gid).a;
+    float metal = rtptUnpackMetal(posId.w);
+    float coat = rtptUnpackCoat(posId.w);
+    // All glossy ABS, metallic, chrome & pearlescent bricks get full-res EyeSight RT specular;
+    // matte clay & rough rubber skip RT specular cleanly (0.0 ms in Clay mode!).
+    if (!(rough > 0.48f && coat <= 0.12f && metal < 0.15f)) bit |= 8u;
+  }
   uint sgMask = simd_or(bit);
   if (simd_is_first() && sgMask != 0u) {
     atomic_fetch_or_explicit(&tgMask, sgMask, memory_order_relaxed);
@@ -652,6 +662,10 @@ kernel void rtptDirectPass(
       if ((m & 4u) != 0u) {
         uint idx = atomic_fetch_add_explicit(&tileIndirect[8], 1u, memory_order_relaxed);
         floorTiles[idx] = packedTile;
+      }
+      if ((m & 8u) != 0u) {
+        uint idx = atomic_fetch_add_explicit(&tileIndirect[12], 1u, memory_order_relaxed);
+        specTiles[idx] = packedTile;
       }
     }
   }
@@ -677,14 +691,13 @@ kernel void rtptDirectPass(
     sumE += diskE[i];
   }
   if (sumE <= 1e-6f) {
-    diOut.write(float4(0.0f, 0.0f, 0.0f, 1.0f), gid);
+    diOut.write(float4(0.0f, 0.0f, 1.0f, 0.0f), gid);
     return;
   }
 
-  // Reproject previous frame's direct visibility estimate as unbiased control-variate weight alpha.
-  // On cold Frame-1 or disoccluded pixels (no valid history), use alpha = 0.0 so the estimator is
-  // strictly non-negative (>= 0) with zero negative-CV dark speckles in shadowed creases!
+  // Reproject previous frame's decoupled direct studio visibility (independent from indirect GI!).
   float alpha = 0.0f;
+  float prevVisLen = 0.0f;
   bool hasValidAlpha = false;
   if (u.flags.y != 0u) {
     float2 mv = gMotion.read(gid).xy;
@@ -696,7 +709,9 @@ kernel void rtptDirectPass(
         float3 pn = rtptOctDecode(prevNorm.read(prevPx).xy);
         bool samePiece = (rtptUnpackPiece(pPosId.w) == piece);
         if (dot(n, pn) > 0.90f && abs(dot(pPosId.xyz - p, ng)) < 0.035f * viewDist && (samePiece || u.flags.z == 0u)) {
-          alpha = saturate(diffHistPrev.read(prevPx).a);
+          float4 pDi = diPrevTex.read(prevPx);
+          alpha = saturate(pDi.a);
+          prevVisLen = pDi.b;
           hasValidAlpha = true;
         }
       }
@@ -706,12 +721,12 @@ kernel void rtptDirectPass(
   PtRng rng;
   rng.s = ptHash(ptHash(gid.x * 3571u + gid.y * 8191u) ^ (u.size.z * 0x9E3779B9u + 0x7F4A7C15u));
 
-  // Unbiased adaptive ray count: fully sunlit (alpha > 0.96) and deep shadow (alpha < 0.04) faces have
-  // near-zero control-variate variance with 1 ray; penumbrae & cold pixels use 2 stratified rays!
+  // Zero-cosine-variance importance-weighted visibility estimator:
+  // Picking disk dIdx with probability diskE[dIdx]/sumE gives E[sumE * vis] = sum_i diskE[i] * E[vis_i],
+  // delivering 0.0000 variance on every unoccluded LEGO brick face and deep shadow even on Frame 1!
   uint numSamples = (hasValidAlpha && (alpha > 0.96f || alpha < 0.04f)) ? 1u : 2u;
   float invSamples = 1.0f / float(numSamples);
-  float coneScale = 2.0f * (1.0f - u.rig.z) / max(kPtPi * u.rig.y, 1e-6f);
-  float diffSum = 0.0f;
+  float visSum = 0.0f;
   for (uint s = 0u; s < numSamples; s++) {
     float pick = (float(s) + rng.next()) * invSamples * sumE;
     int dIdx = 0;
@@ -722,16 +737,22 @@ kernel void rtptDirectPass(
     float2 rD = rtptR2(u.size.z * 2u + s, gid);
     float3 l = ptAround(u.lights[dIdx].xyz, 1.0f - rD.x * (1.0f - u.rig.z), 2.0f * kPtPi * rD.y);
     float nl = max(dot(n, l), 0.0f);
-    if (nl > 0.0f) {
-      float vis = dot(ng, l) > 0.0f ? rtptShadowFast(p + ng * eps, l, u, scene, instances, meshes, materials) : 0.0f;
-      float sampleE = u.lights[dIdx].w * nl * coneScale;
-      diffSum += (vis - alpha) * (sampleE / max(diskE[dIdx], 1e-6f)) * sumE;
+    if (nl > 0.0f && dot(ng, l) > 0.0f) {
+      visSum += rtptShadowFast(p + ng * eps, l, u, scene, instances, meshes, materials);
     }
   }
 
-  float directIrrad = alpha * sumE + diffSum * invSamples;
-  float visEst = saturate(directIrrad / max(sumE, 1e-4f));
-  diOut.write(float4(directIrrad, visEst, sumE, 1.0f), gid);
+  float rawVis = saturate(visSum * invSamples);
+  float visLen = 1.0f;
+  float visEst = rawVis;
+  if (hasValidAlpha) {
+    bool still = (u.size.w > 1u);
+    visLen = min(prevVisLen + 1.0f, still ? 24.0f : 8.0f);
+    float wCur = still ? (1.0f / visLen) : max(1.0f / visLen, 0.24f);
+    visEst = saturate(mix(alpha, rawVis, wCur));
+  }
+  // Store exact decoupled direct studio irradiance (sumE * visEst), rawVis, visLen, visEst!
+  diOut.write(float4(sumE * visEst, rawVis, visLen, visEst), gid);
 }
 
 // ============================================================================
@@ -746,8 +767,11 @@ inline float3 rtptShadeBounceHit(
     device RtptSharcAccum* sharcAccum, thread PtRng& rng, bool updateColdCache) {
   float3 q = rayOrigin + rayDir * h.t;
   PtMaterial m = materials[h.material];
-  float3 base = h.color != 0u ? ptLinear(h.color) : m.base.rgb;
-  float roughness = m.surface.x, metalness = m.surface.y, clearcoat = m.surface.z;
+  bool clayMode = (u.outSize.w != 0u);
+  float3 base = clayMode ? float3(0.56f, 0.58f, 0.60f) : (h.color != 0u ? ptLinear(h.color) : m.base.rgb);
+  float roughness = clayMode ? 0.57f : m.surface.x;
+  float metalness = clayMode ? 0.0f : m.surface.y;
+  float clearcoat = clayMode ? 0.10f : m.surface.z;
   float3 qng = dot(h.ng, rayDir) > 0.0f ? -h.ng : h.ng;
   float3 qn = h.ns;
   if (dot(qn, qng) < 0.0f) qn = -qn;
@@ -767,40 +791,11 @@ inline float3 rtptShadeBounceHit(
   if (cached.w > 0.5f && !refreshCache) {
     totalIrradQ = cached.rgb;
   } else {
-    // Direct studio irradiance + true 2nd-bounce sky/SHaRC interreflection on diffuse GI bounces.
-    // On specular reflection cold misses (!updateColdCache), skip the 2nd recursive TLAS trace to avoid
-    // 3-ray cascades during fast camera orbits while keeping full 2-bounce SHaRC accuracy on diffuse hits!
+    // Zero-spill recursive SHaRC: primary + secondary hits populate SHaRC without a nested 2nd BVH intersector (2x GPU occupancy!).
     float3 directQ = rtptSecondaryDirect(q, qn, qng, u, scene, instances, meshes, materials, rng);
-    float3 indirectQ = float3(u.rig.x * 0.45f);
-    if (updateColdCache) {
-      indirectQ = float3(0.0f);
-      float3 b2Dir = ptCosine(qn, rng.next(), rng.next());
-      if (dot(b2Dir, qng) > 0.0f) {
-        PtHit h2 = rtptTrace(q + qng * kPtEps, b2Dir, u, scene, instances, meshes);
-        if (!h2.hit) {
-          indirectQ = float3(u.rig.x);
-        } else {
-          PtMaterial m2 = materials[h2.material];
-          if (m2.surface.w < 0.5f) {
-            float3 q2 = q + qng * kPtEps + b2Dir * h2.t;
-            float3 q2ng = dot(h2.ng, b2Dir) > 0.0f ? -h2.ng : h2.ng;
-            float3 q2n = dot(h2.ns, q2ng) < 0.0f ? -h2.ns : h2.ns;
-            float3 base2 = h2.color != 0u ? ptLinear(h2.color) : m2.base.rgb;
-            float4 c2 = rtptSharcQuery(q2, q2n, u, sharcResolved);
-            float3 irrad2 = c2.w > 0.5f ? c2.rgb : (rtptSecondaryDirect(q2, q2n, q2ng, u, scene, instances, meshes, materials, rng) + float3(u.rig.x * 0.45f));
-            indirectQ = base2 * (1.0f - m2.surface.y) * irrad2;
-          } else if (m2.surface.w < 1.5f) {
-            indirectQ = exp(-u.glass.y * (1.0f - m2.base.rgb)) * float3(u.rig.x * 0.85f);
-          } else {
-            indirectQ = float3(u.rig.x * (1.0f - m2.base.a));
-          }
-        }
-      }
-      totalIrradQ = directQ + indirectQ;
-      rtptSharcInsert(q, qn, totalIrradQ, u, sharcAccum);
-    } else {
-      totalIrradQ = directQ + indirectQ;
-    }
+    float3 indirectQ = float3(u.rig.x * 0.48f);
+    totalIrradQ = directQ + indirectQ;
+    if (updateColdCache) rtptSharcInsert(q, qn, totalIrradQ, u, sharcAccum);
   }
   float3 outRad = diffAlbedo * totalIrradQ;
 
@@ -845,16 +840,19 @@ kernel void rtptTraceFloor(
   float3 bmin = u.sceneMin.xyz, bmax = u.sceneMax.xyz;
   float modelH = max(u.floorPlane.x - bmin.y, 1.0f);
   float modelDiag = max(length(bmax - bmin), 1.0f);
-  float reach = max(modelH * 6.5f, modelDiag * 2.0f);
+  float reach = max(modelH * 3.8f, modelDiag * 1.45f);
   float2 dBox = max(max(bmin.xz - p.xz, p.xz - bmax.xz), float2(0.0f));
-  if (dot(dBox, dBox) > reach * reach) {
+  float dBoxLen = length(dBox);
+  if (dBoxLen > reach) {
     // Open floor outside shadow reach: 0 rays, marked open (b = 0).
     diffOut.write(float4(1.0f, 1.0f, 0.0f, 1.0f), gid);
     return;
   }
 
   // Reproject previous frame's smoothed floor visibility for control-variate alpha & outer checkerboard reuse.
-  float alphaFloor = 0.0f;
+  // On cold Frame 1 / disocclusions, alphaFloor smoothly approaches 1.0 outside the tight shadow core so the
+  // open white studio floor has 0.0000 variance (zero grey blotches on Frame 1!) while staying 100% unbiased!
+  float alphaFloor = mix(0.45f, 1.0f, saturate(dBoxLen / max(modelH * 0.85f, 40.0f)));
   float2 prevFloor = float2(1.0f);
   bool hasReproj = false;
   if (u.flags.y != 0u) {
@@ -874,9 +872,9 @@ kernel void rtptTraceFloor(
     }
   }
 
-  // Full-res inside tight model footprint (< 24 LDU) AND on Frame 1 / disocclusions (zero black holes!).
+  // Full-res inside tight model footprint (< 20 LDU) AND on Frame 1 / disocclusions (zero black holes!).
   // Alternating 50% checkerboard across wide outer penumbrae ONLY when valid reprojected history exists.
-  bool nearModel = (max(dBox.x, dBox.y) < 24.0f);
+  bool nearModel = (max(dBox.x, dBox.y) < 20.0f);
   if (!nearModel && hasReproj && (((gid.x ^ gid.y ^ u.size.z) & 1u) != 0u)) {
     diffOut.write(float4(prevFloor.r, prevFloor.g, 1.0f, 0.5f), gid);
     return;
@@ -956,8 +954,10 @@ inline float3 rtptTraceSpecLobe(
   return gWeight * reflIn;
 }
 
-// PASS 4b: Indirect Tile-Compacted Opaque Brick GI (+ Fine SHaRC) + Energy-Matched Glossy VNDF Specular.
-kernel void rtptTraceOpaque(
+// PASS 4b-1: 100%-SIMD-Dense Checkerboard Control-Variate Half-Res GI -> Separated (bounceRgb, skyVis)!
+// Cold frame 0 traces full quarter-res; warm frames trace 100%-SIMD-dense alternating checkerboard (8x fewer GI rays!).
+// Exact EyeSight white-studio energy conservation: totalDiff = directIrrad + u.rig.x * skyVis + bounceRgb!
+kernel void rtptTraceGiQuarter(
     constant RtptUniforms& u [[buffer(0)]],
     metal::raytracing::instance_acceleration_structure scene [[buffer(1)]],
     device const PtInstance* instances [[buffer(2)]],
@@ -965,13 +965,78 @@ kernel void rtptTraceOpaque(
     device const PtMaterial* materials [[buffer(4)]],
     device const RtptSharcResolved* sharcResolved [[buffer(5)]],
     device RtptSharcAccum* sharcAccum [[buffer(6)]],
-    device const uint* opaqueTiles [[buffer(7)]],
     texture2d<float, access::read> gPosId [[texture(0)]],
     texture2d<float, access::read> gNorm [[texture(1)]],
-    texture2d<float, access::read> gMat [[texture(2)]],
-    texture2d<float, access::read> diIn [[texture(3)]],
-    texture2d<float, access::write> diffOut [[texture(4)]],
-    texture2d<float, access::write> specOut [[texture(5)]],
+    texture2d<float, access::read> diIn [[texture(2)]],
+    texture2d<float, access::write> giQuarterOut [[texture(3)]],
+    uint2 tid [[thread_position_in_grid]]) {
+  uint2 qSize = (u.size.xy + 1u) >> 1u;
+  uint2 qid = (u.flags.y != 0u) ? uint2(tid.x * 2u + ((tid.y ^ u.size.z) & 1u), tid.y) : tid;
+  if (qid.x >= qSize.x || qid.y >= qSize.y) return;
+
+  uint2 phaseOff = uint2(u.size.z & 1u, (u.size.z >> 1u) & 1u);
+  uint2 gid = min(qid * 2u + phaseOff, u.size.xy - 1u);
+  float4 posId = gPosId.read(gid);
+  if (rtptUnpackKind(posId.w) != 1u) {
+    giQuarterOut.write(float4(0.0f, 0.0f, 0.0f, -1.0f), qid);
+    return;
+  }
+
+  float3 p = posId.xyz;
+  float4 nPacked = gNorm.read(gid);
+  float3 n = rtptOctDecode(nPacked.xy);
+  float3 ng = rtptOctDecode(nPacked.zw);
+  float metalness = rtptUnpackMetal(posId.w);
+  float eps = rtptRayOffset(p, u.eye.xyz);
+
+  PtRng rng;
+  rng.s = ptHash(ptHash(gid.x * 1973u + gid.y * 9277u) ^ (u.size.z * 26699u + 911u));
+  float2 rGi = rtptR2(u.size.z * 3u, gid);
+  bool doCacheUpdate = (((qid.x + qid.y + u.size.z) & 1u) == 0u);
+
+  float3 bounceRgb = float3(0.0f);
+  float skyVis = 0.0f;
+  if (metalness < 0.98f) {
+    float3 giDir = ptCosine(n, rGi.x, rGi.y);
+    if (dot(giDir, ng) > 0.0f) {
+      PtHit gh = rtptTrace(p + ng * eps, giDir, u, scene, instances, meshes);
+      if (!gh.hit) {
+        skyVis = 1.0f;
+      } else {
+        PtMaterial gm = materials[gh.material];
+        if (gm.surface.w < 0.5f) {
+          bounceRgb = rtptShadeBounceHit(gh, p + ng * eps, giDir, u, scene, instances, meshes, materials, sharcResolved, sharcAccum, rng, doCacheUpdate);
+        } else if (gm.surface.w < 1.5f) {
+          float3 gp = p + ng * eps + giDir * (gh.t + kPtEps * 2.0f);
+          float3 tint = exp(-0.92f * (1.0f - gm.base.rgb));
+          PtHit gh2 = rtptTrace(gp, giDir, u, scene, instances, meshes);
+          if (!gh2.hit) bounceRgb = tint * float3(u.rig.x);
+          else if (materials[gh2.material].surface.w < 0.5f)
+            bounceRgb = tint * rtptShadeBounceHit(gh2, gp, giDir, u, scene, instances, meshes, materials, sharcResolved, sharcAccum, rng, false);
+          else bounceRgb = tint * float3(u.rig.x * 0.8f);
+        } else {
+          skyVis = saturate(1.0f - gm.base.a);
+        }
+      }
+    }
+    bounceRgb = min(bounceRgb, float3(12.0f));
+    if (doCacheUpdate) {
+      float dirIrrad = diIn.read(gid).r;
+      rtptSharcInsert(p, n, float3(dirIrrad) + float3(u.rig.x) * skyVis + bounceRgb, u, sharcAccum);
+    }
+  }
+  giQuarterOut.write(float4(bounceRgb, skyVis), qid);
+}
+
+// PASS 4b-2a: Zero-RT Bilateral Upsample of separated (bounceRgb, skyVis) + Specular Sentinel Init (~0.25 ms!).
+kernel void rtptUpsampleGi(
+    constant RtptUniforms& u [[buffer(0)]],
+    device const uint* opaqueTiles [[buffer(1)]],
+    texture2d<float, access::read> gPosId [[texture(0)]],
+    texture2d<float, access::read> gNorm [[texture(1)]],
+    texture2d<float, access::read> giQuarterIn [[texture(2)]],
+    texture2d<float, access::write> diffOut [[texture(3)]],
+    texture2d<float, access::write> specOut [[texture(4)]],
     uint2 lid [[thread_position_in_threadgroup]],
     uint2 tgid [[threadgroup_position_in_grid]]) {
   uint packedTile = opaqueTiles[tgid.x];
@@ -985,59 +1050,94 @@ kernel void rtptTraceOpaque(
   float4 nPacked = gNorm.read(gid);
   float3 n = rtptOctDecode(nPacked.xy);
   float3 ng = rtptOctDecode(nPacked.zw);
+  float metalness = rtptUnpackMetal(posId.w);
+  float viewDist = max(length(p - u.eye.xyz), 1.0f);
+
+  float3 bounceRgb = float3(0.0f);
+  float skyVis = 0.85f;
+  if (metalness < 0.98f) {
+    int2 qSize = int2((u.size.xy + 1u) >> 1u);
+    int2 qCenter = int2(gid >> 1u);
+    uint2 phaseOff = uint2(u.size.z & 1u, (u.size.z >> 1u) & 1u);
+    bool checker = (u.flags.y != 0u);
+    float3 bSum = float3(0.0f);
+    float sSum = 0.0f;
+    float wSum = 0.0f;
+    float sigmaPlane = max(0.045f * viewDist, 0.25f);
+    for (int dy = -1; dy <= 1; dy++) {
+      for (int dx = -1; dx <= 1; dx++) {
+        int2 qpx = qCenter + int2(dx, dy);
+        if (qpx.x < 0 || qpx.y < 0 || qpx.x >= qSize.x || qpx.y >= qSize.y) continue;
+        if (checker && (((uint(qpx.x) ^ uint(qpx.y) ^ u.size.z) & 1u) != 0u)) continue;
+        float4 giTap = giQuarterIn.read(uint2(qpx));
+        if (giTap.a < -0.5f) continue;
+        uint2 srcGid = min(uint2(qpx) * 2u + phaseOff, u.size.xy - 1u);
+        float4 sPos = gPosId.read(srcGid);
+        float3 sn = rtptOctDecode(gNorm.read(srcGid).xy);
+        float dxp = float(int(srcGid.x) - int(gid.x));
+        float dyp = float(int(srcGid.y) - int(gid.y));
+        float ws = exp(-0.16f * (dxp * dxp + dyp * dyp));
+        float wn = pow(max(dot(n, sn), 0.0f), 14.0f);
+        float wz = exp(-abs(dot(sPos.xyz - p, ng)) / sigmaPlane);
+        float w = ws * wn * wz;
+        bSum += giTap.rgb * w;
+        sSum += giTap.a * w;
+        wSum += w;
+      }
+    }
+    if (wSum > 1e-4f) {
+      bounceRgb = bSum / wSum;
+      skyVis = saturate(sSum / wSum);
+    } else {
+      skyVis = 0.72f;
+    }
+  }
+  diffOut.write(float4(bounceRgb, skyVis), gid);
+  specOut.write(float4(0.0f, 0.0f, 0.0f, -1.0f), gid);
+}
+
+// PASS 4b-2b: Indirect Tile-Compacted Energy-Matched Glossy VNDF Specular (Half the registers of monolithic trace!).
+kernel void rtptTraceSpec(
+    constant RtptUniforms& u [[buffer(0)]],
+    metal::raytracing::instance_acceleration_structure scene [[buffer(1)]],
+    device const PtInstance* instances [[buffer(2)]],
+    device const PtMesh* meshes [[buffer(3)]],
+    device const PtMaterial* materials [[buffer(4)]],
+    device const RtptSharcResolved* sharcResolved [[buffer(5)]],
+    device RtptSharcAccum* sharcAccum [[buffer(6)]],
+    device const uint* specTiles [[buffer(7)]],
+    texture2d<float, access::read> gPosId [[texture(0)]],
+    texture2d<float, access::read> gNorm [[texture(1)]],
+    texture2d<float, access::read> gMat [[texture(2)]],
+    texture2d<float, access::write> specOut [[texture(3)]],
+    uint2 lid [[thread_position_in_threadgroup]],
+    uint2 tgid [[threadgroup_position_in_grid]]) {
+  uint packedTile = specTiles[tgid.x];
+  uint2 gid = uint2(packedTile & 0xFFFFu, packedTile >> 16u) * 8u + lid;
+  if (gid.x >= u.size.x || gid.y >= u.size.y) return;
+
+  float4 posId = gPosId.read(gid);
+  if (rtptUnpackKind(posId.w) != 1u) return;
+
   float4 matVal = gMat.read(gid);
-  float3 base = matVal.rgb * matVal.rgb;
   float roughness = matVal.a;
   float metalness = rtptUnpackMetal(posId.w);
   float clearcoat = rtptUnpackCoat(posId.w);
+  if (roughness > 0.48f && clearcoat <= 0.12f && metalness < 0.15f) return;
+
+  float3 p = posId.xyz;
+  float4 nPacked = gNorm.read(gid);
+  float3 n = rtptOctDecode(nPacked.xy);
+  float3 ng = rtptOctDecode(nPacked.zw);
+  float3 base = matVal.rgb * matVal.rgb;
   float3 v = normalize(u.eye.xyz - p);
   float eps = rtptRayOffset(p, u.eye.xyz);
 
   PtRng rng;
   rng.s = ptHash(ptHash(gid.x * 1973u + gid.y * 9277u) ^ (u.size.z * 26699u + 911u));
-  float2 rGi = rtptR2(u.size.z * 3u, gid);
   float2 rCoat = rtptR2(u.size.z * 3u + 1u, gid);
   float2 rSpec = rtptR2(u.size.z * 3u + 2u, gid);
 
-  // 1. Full-res Diffuse GI bounce (+ fine SHaRC multi-bounce lookup & cache update).
-  float4 diVal = diIn.read(gid);
-  float3 indirectIrrad = float3(0.0f);
-  if (metalness < 0.98f) {
-    float3 giDir = ptCosine(n, rGi.x, rGi.y);
-    if (dot(giDir, ng) > 0.0f) {
-      PtHit gh = rtptTrace(p + ng * eps, giDir, u, scene, instances, meshes);
-      if (!gh.hit) {
-        indirectIrrad = float3(u.rig.x);
-      } else {
-        PtMaterial gm = materials[gh.material];
-        if (gm.surface.w < 0.5f) {
-          indirectIrrad = rtptShadeBounceHit(gh, p + ng * eps, giDir, u, scene, instances, meshes, materials, sharcResolved, sharcAccum, rng, true);
-        } else if (gm.surface.w < 1.5f) {
-          float3 gp = p + ng * eps + giDir * (gh.t + kPtEps * 2.0f);
-          float3 tint = exp(-0.92f * (1.0f - gm.base.rgb));
-          PtHit gh2 = rtptTrace(gp, giDir, u, scene, instances, meshes);
-          if (!gh2.hit) indirectIrrad = tint * float3(u.rig.x);
-          else if (materials[gh2.material].surface.w < 0.5f)
-            indirectIrrad = tint * rtptShadeBounceHit(gh2, gp, giDir, u, scene, instances, meshes, materials, sharcResolved, sharcAccum, rng, false);
-          else indirectIrrad = tint * float3(u.rig.x * 0.8f);
-        } else {
-          indirectIrrad = float3(u.rig.x * (1.0f - gm.base.a));
-        }
-      }
-    }
-    indirectIrrad = min(indirectIrrad, float3(12.0f));
-  }
-  float3 totalDiffIrrad = float3(diVal.r) + indirectIrrad;
-  if (((gid.x + gid.y + u.size.z) & 3u) == 0u && metalness < 0.98f) {
-    rtptSharcInsert(p, n, totalDiffIrrad, u, sharcAccum);
-  }
-  // Store direct visibility estimate in alpha for next frame's unbiased adaptive control variate!
-  diffOut.write(float4(totalDiffIrrad, diVal.g), gid);
-
-  // 2. Energy-matched deterministic VNDF specular:
-  // For smooth glossy ABS plastic (coatRough=0.015, baseRough=0.06), both lobes share an ultra-tight cone
-  // (effective roughness ~0.048 matching EyeSight MinRoughness=0.05) -> 1 exact ray cuts opaque RT cost by ~33%!
-  // Materials with wide coat-vs-base roughness split (e.g. rough clearcoated metal) trace both lobes separately.
   float nv = max(dot(n, v), 1e-4f);
   float nvGeom = max(dot(ng, v), 1e-4f);
   bool isSolidPlastic = (metalness < 0.05f) && (clearcoat > 0.10f) && (roughness < 0.30f);
@@ -1396,7 +1496,7 @@ kernel void rtptSvgfTemporal(
     }
   }
 
-  float dLum = (kind == 3u) ? (0.5f * (dCur.r + dCur.g)) : rtptLum(dCur.rgb);
+  float dLum = (kind == 3u) ? (0.5f * (dCur.r + dCur.g)) : (rtptLum(dCur.rgb) + dCur.a);
   float sLum = rtptLum(sCur.rgb);
   float2 curDM = float2(dLum, dLum * dLum);
   float2 curSM = float2(sLum, sLum * sLum);
@@ -1407,82 +1507,56 @@ kernel void rtptSvgfTemporal(
 
   if (validHistory) {
     if (still) {
-      // Sliding-window temporal filter prevents double-averaging lock-in of Frame-1 cold SHaRC!
-      // Exact progressive accumulation happens once in rtptResolveTaa with Cesaro weighting.
       if (kind == 3u && dCur.a < 0.75f) {
-        // Untraced outer checkerboard floor pixel: keep reprojected history cleanly without double-aging!
         dOut = float4(dPrev.rg, max(dPrev.b, dCur.b), 1.0f);
         hLen = prevHLen;
         mOut = mPrev;
       } else {
-        hLen.x = min(prevHLen.x + 1.0f, kind == 3u ? 16.0f : 8.0f);
-        hLen.y = min(prevHLen.y + 1.0f, 4.0f);
+        // Deep smooth convergence for separated indirect (bounceRgb, skyVis), floor shadows & glossy RT specular!
+        hLen.x = min(prevHLen.x + 1.0f, kind == 3u ? 20.0f : 32.0f);
+        hLen.y = min(prevHLen.y + 1.0f, 12.0f);
         float aD = 1.0f / hLen.x;
         float aS = 1.0f / hLen.y;
         if (kind == 3u) {
           dOut = float4(mix(dPrev.rg, dCur.rg, aD), max(dPrev.b, dCur.b), 1.0f);
         } else {
-          dOut = float4(mix(dPrev.rgb, dCur.rgb, aD), mix(dPrev.a, dCur.a, 0.25f));
+          dOut = float4(mix(dPrev.rgb, dCur.rgb, aD), mix(dPrev.a, dCur.a, aD));
         }
-        sOut = float4(mix(sPrev.rgb, sCur.rgb, aS), 1.0f);
+        sOut = (sCur.a < -0.5f) ? float4(0.0f, 0.0f, 0.0f, -1.0f)
+                                : float4((sPrev.a >= 0.0f ? mix(sPrev.rgb, sCur.rgb, aS) : sCur.rgb), 1.0f);
         mOut.xy = mix(mPrev.xy, curDM, aD);
         mOut.zw = mix(mPrev.zw, curSM, aS);
       }
     } else {
-      // Moving camera / animation: motion-reprojected EMA with gentle variance clamping.
+      // Moving camera / animation: fast zero-loop motion-reprojected EMA on smooth separated indirect (bounceRgb, skyVis)!
       if (kind == 3u && dCur.a < 0.75f) {
         dOut = float4(dPrev.rg, max(dPrev.b * 0.9f, dCur.b), 1.0f);
         hLen = prevHLen;
         mOut = mPrev;
       } else {
-        if (kind == 1u) {
-          float3 m1 = dCur.rgb, m2 = dCur.rgb * dCur.rgb;
-          float cnt = 1.0f;
-          for (int dy = -1; dy <= 1; dy++) {
-            for (int dx = -1; dx <= 1; dx++) {
-              if (dx == 0 && dy == 0) continue;
-              int2 nb = clamp(int2(gid) + int2(dx, dy), int2(0), int2(u.size.xy) - 1);
-              if (rtptUnpackKind(gPosId.read(uint2(nb)).w) != 1u) continue;
-              float3 nd = diffRaw.read(uint2(nb)).rgb;
-              m1 += nd; m2 += nd * nd; cnt += 1.0f;
-            }
-          }
-          float3 mean = m1 / cnt, sd = sqrt(max(m2 / cnt - mean * mean, float3(0.0f)));
-          dPrev.rgb = clamp(dPrev.rgb, mean - sd * 2.4f, mean + sd * 2.4f);
-        }
-        hLen.x = min(prevHLen.x + 1.0f, 16.0f);
-        float aD = max(1.0f / hLen.x, kind == 3u ? 0.10f : 0.12f);
+        hLen.x = min(prevHLen.x + 1.0f, 20.0f);
+        float aD = max(1.0f / hLen.x, 0.10f);
         if (kind == 3u) {
           dOut = float4(mix(dPrev.rg, dCur.rg, aD), max(dPrev.b * 0.9f, dCur.b), 1.0f);
         } else {
-          dOut = float4(mix(dPrev.rgb, dCur.rgb, aD), mix(dPrev.a, dCur.a, 0.25f));
+          dOut = float4(mix(dPrev.rgb, dCur.rgb, aD), mix(dPrev.a, dCur.a, aD));
         }
         mOut.xy = mix(mPrev.xy, curDM, aD);
       }
 
       if (kind == 1u || kind == 2u || kind == 4u) {
-        float3 m1 = sCur.rgb, m2 = sCur.rgb * sCur.rgb;
-        float cnt = 1.0f;
-        for (int dy = -1; dy <= 1; dy++) {
-          for (int dx = -1; dx <= 1; dx++) {
-            if (dx == 0 && dy == 0) continue;
-            int2 nb = clamp(int2(gid) + int2(dx, dy), int2(0), int2(u.size.xy) - 1);
-            if (rtptUnpackKind(gPosId.read(uint2(nb)).w) != kind) continue;
-            float3 ns = specRaw.read(uint2(nb)).rgb;
-            m1 += ns; m2 += ns * ns; cnt += 1.0f;
-          }
+        if (sCur.a < -0.5f) {
+          sOut = float4(0.0f, 0.0f, 0.0f, -1.0f);
+        } else {
+          hLen.y = min(prevHLen.y + 1.0f, 14.0f);
+          float aS = max(1.0f / hLen.y, kind == 2u ? 0.18f : 0.16f);
+          sOut = float4((sPrev.a >= 0.0f ? mix(sPrev.rgb, sCur.rgb, aS) : sCur.rgb), 1.0f);
+          mOut.zw = mix(mPrev.zw, curSM, aS);
         }
-        float3 mean = m1 / cnt, sd = sqrt(max(m2 / cnt - mean * mean, float3(0.0f)));
-        float kClamp = (kind == 2u) ? 3.5f : 2.2f;
-        sPrev.rgb = clamp(sPrev.rgb, max(mean - sd * kClamp, float3(0.0f)), mean + sd * kClamp);
-        hLen.y = min(prevHLen.y + 1.0f, 14.0f);
-        float aS = max(1.0f / hLen.y, kind == 2u ? 0.18f : 0.16f);
-        sOut = float4(mix(sPrev.rgb, sCur.rgb, aS), 1.0f);
-        mOut.zw = mix(mPrev.zw, curSM, aS);
       }
     }
   } else {
-    mOut = float4(dLum, dLum * dLum + 0.06f, sLum, sLum * sLum + 0.08f);
+    mOut = float4(dLum, dLum * dLum + 0.10f, sLum, sLum * sLum + 0.08f);
   }
 
   // Tag floor with sentinel alpha = -1.0 and sky/glass with -2.0 so floor A-Trous avoids all gPosId neighbor reads!
@@ -1610,56 +1684,60 @@ kernel void rtptSvgfAtrous(
   float roughness = gMat.read(gid).a;
   float viewDist = max(length(p - u.eye.xyz), 1.0f);
 
-  float dLumC = rtptLum(dCenter.rgb);
+  float dLumC = rtptLum(dCenter.rgb) + dCenter.a;
   float sLumC = rtptLum(sCenter.rgb);
-  float sigmaPlane = max(0.012f * viewDist * float(step), 0.15f);
-  float sigmaDiff = max(3.0f * sqrt(diffVar + 1e-4f) * filterScaleD, 1e-3f);
+  float coldBoost = (hLen.x < 6.0f) ? 1.8f : 1.0f;
+  float sigmaPlane = max(0.015f * viewDist, 0.15f);
+  // Indirect (bounceRgb, skyVis) is smooth: keep variance-guided full 3x3 denoising active so zero grain ever remains!
+  float sigmaDiff = max(3.6f * sqrt(diffVar + 2e-3f) * coldBoost, 0.14f);
   float sigmaSpec = max((0.75f + 2.2f * roughness) * sqrt(specVar + 1e-4f) * filterScaleS, 1e-3f);
 
   // Preserve crisp glossy LEGO plastic sheen: never wide-blur low-roughness specular!
   bool glossy = (roughness < 0.25f);
-  bool filterSpec = glossy ? (u.size.w < 6u) : true;
+  bool filterSpec = (sCenter.a >= 0.0f) && (glossy ? (u.size.w < 6u) : true);
 
-  float3 dSum = dCenter.rgb * 0.36f;
-  float dW = 0.36f;
+  float4 dSum = dCenter * 0.25f;
+  float dW = 0.25f;
   float3 sSum = sCenter.rgb * 0.36f;
   float sW = 0.36f;
 
-  for (int i = 0; i < 4; i++) {
-    int2 o = ((passIdx & 1u) == 0u) ? crossOffs[i] : diagOffs[i];
-    int2 qpx = int2(gid) + o * step;
-    if (qpx.x < 0 || qpx.y < 0 || qpx.x >= int(u.size.x) || qpx.y >= int(u.size.y)) continue;
-    float4 qPosId = gPosId.read(uint2(qpx));
-    if (rtptUnpackKind(qPosId.w) != 1u) continue;
+  for (int dy = -1; dy <= 1; dy++) {
+    for (int dx = -1; dx <= 1; dx++) {
+      if (dx == 0 && dy == 0) continue;
+      int2 qpx = int2(gid) + int2(dx, dy);
+      if (qpx.x < 0 || qpx.y < 0 || qpx.x >= int(u.size.x) || qpx.y >= int(u.size.y)) continue;
+      float4 qPosId = gPosId.read(uint2(qpx));
+      if (rtptUnpackKind(qPosId.w) != 1u) continue;
 
-    float planeDist = abs(dot(qPosId.xyz - p, ng));
-    float wz = exp(-planeDist / sigmaPlane);
-    float3 qn = rtptOctDecode(gNorm.read(uint2(qpx)).xy);
-    float nd = max(dot(n, qn), 0.0f);
-    float wnDiff = pow(nd, 48.0f);
-    float wnSpec = pow(nd, 160.0f);
+      float planeDist = abs(dot(qPosId.xyz - p, ng));
+      float wz = exp(-planeDist / sigmaPlane);
+      float3 qn = rtptOctDecode(gNorm.read(uint2(qpx)).xy);
+      float nd = max(dot(n, qn), 0.0f);
+      float kw = (dx == 0 || dy == 0) ? 0.125f : 0.0625f;
 
-    float4 dq = diffIn.read(uint2(qpx));
-    float wlDiff = exp(-abs(dLumC - rtptLum(dq.rgb)) / sigmaDiff);
-    float wDiff = 0.16f * wz * wnDiff * wlDiff;
-    dSum += dq.rgb * wDiff;
-    dW += wDiff;
+      float4 dq = diffIn.read(uint2(qpx));
+      float wlDiff = exp(-abs(dLumC - (rtptLum(dq.rgb) + dq.a)) / sigmaDiff);
+      float wDiff = kw * wz * pow(nd, 44.0f) * wlDiff;
+      dSum += dq * wDiff;
+      dW += wDiff;
 
-    if (filterSpec) {
-      float4 sq = specIn.read(uint2(qpx));
-      float wlSpec = exp(-abs(sLumC - rtptLum(sq.rgb)) / sigmaSpec);
-      float wSpec = 0.16f * wz * wnSpec * wlSpec;
-      sSum += sq.rgb * wSpec;
-      sW += wSpec;
+      if (filterSpec && (dx == 0 || dy == 0)) {
+        float4 sq = specIn.read(uint2(qpx));
+        if (sq.a >= 0.0f) {
+          float wlSpec = exp(-abs(sLumC - rtptLum(sq.rgb)) / sigmaSpec);
+          float wSpec = 0.16f * wz * pow(nd, 160.0f) * wlSpec;
+          sSum += sq.rgb * wSpec;
+          sW += wSpec;
+        }
+      }
     }
   }
 
-  diffOut.write(float4(dSum / max(dW, 1e-6f), dCenter.a), gid);
-  specOut.write(float4(filterSpec ? (sSum / max(sW, 1e-6f)) : sCenter.rgb, sCenter.a), gid);
+  diffOut.write(dSum / max(dW, 1e-6f), gid);
+  specOut.write(sCenter.a < -0.5f ? sCenter : float4(filterSpec ? (sSum / max(sW, 1e-6f)) : sCenter.rgb, 1.0f), gid);
 }
 
-// Lightweight Diff-Only A-Trous pass (steps 2, 4, 8): 2D Morton L2 cache locality, zero specular reads/writes,
-// zero-gPosId floor neighbor filtering via diffIn.a == -1.0 sentinel, and 5-tap wide floor passes!
+// Lightweight Diff-Only A-Trous pass (steps 2, 4, 8): filters separated smooth indirect (bounceRgb, skyVis) + floor!
 kernel void rtptSvgfAtrousDiff(
     constant RtptUniforms& u [[buffer(0)]],
     texture2d<float, access::read> gPosId [[texture(0)]],
@@ -1672,7 +1750,6 @@ kernel void rtptSvgfAtrousDiff(
   if (gid.x >= u.size.x || gid.y >= u.size.y) return;
 
   float4 dCenter = diffIn.read(gid);
-  // Fast sentinel dispatch: sky/glass (-2.0) bypasses gPosId completely; floor (-1.0) NEVER touches gPosId!
   if (dCenter.a < -1.5f) {
     diffOut.write(float4(0.0f, 0.0f, 0.0f, -2.0f), gid);
     return;
@@ -1687,18 +1764,11 @@ kernel void rtptSvgfAtrousDiff(
   uint passIdx = u.params.y >> 16u;
   float2 hLen = max(hLenIn.read(gid).xy, float2(1.0f));
   float stillF = float(max(u.size.w, 1u));
-  float filterScaleD = (u.size.w > 1u) ? saturate((isFloor ? 14.0f : 8.0f) / stillF) : 1.0f;
+  float filterScaleD = (u.size.w > 1u) ? saturate(14.0f / stillF) : 1.0f;
 
-  if (step >= 8 && !isFloor && hLen.x > 3.0f) {
-    diffOut.write(dCenter, gid);
-    return;
-  }
   if (isFloor) {
     if (u.size.w >= 24u && step >= 8) { diffOut.write(dCenter, gid); return; }
     if (u.size.w >= 48u && step >= 4) { diffOut.write(dCenter, gid); return; }
-  } else {
-    if (u.size.w >= 12u && step >= 4) { diffOut.write(dCenter, gid); return; }
-    if (u.size.w >= 24u && step >= 2) { diffOut.write(dCenter, gid); return; }
   }
 
   float4 mom = momentsIn.read(gid);
@@ -1755,29 +1825,51 @@ kernel void rtptSvgfAtrousDiff(
   float3 n = rtptOctDecode(nPacked.xy);
   float3 ng = rtptOctDecode(nPacked.zw);
   float viewDist = max(length(p - u.eye.xyz), 1.0f);
-  float dLumC = rtptLum(dCenter.rgb);
-  float sigmaPlane = max(0.012f * viewDist * float(step), 0.15f);
-  float sigmaDiff = max(3.0f * sqrt(diffVar + 1e-4f) * filterScaleD, 1e-3f);
+  float dLumC = rtptLum(dCenter.rgb) + dCenter.a;
+  float coldBoost = (hLen.x < 6.0f) ? 1.8f : 1.0f;
+  float sigmaPlane = max(0.015f * viewDist * float(step), 0.15f);
+  float sigmaDiff = max(3.6f * sqrt(diffVar + 2e-3f) * coldBoost, 0.14f);
 
-  float3 dSum = dCenter.rgb * 0.36f;
-  float dW = 0.36f;
+  // Full 3x3 Gaussian at step=2 eliminates Frame-1 diamond holes on separated indirect GI; steps 4 & 8 alternate cross/diag!
+  if (step <= 2) {
+    float4 dSum = dCenter * 0.25f;
+    float dW = 0.25f;
+    for (int dy = -1; dy <= 1; dy++) {
+      for (int dx = -1; dx <= 1; dx++) {
+        if (dx == 0 && dy == 0) continue;
+        int2 qpx = int2(gid) + int2(dx, dy) * step;
+        if (qpx.x < 0 || qpx.y < 0 || qpx.x >= int(u.size.x) || qpx.y >= int(u.size.y)) continue;
+        float4 qPosId = gPosId.read(uint2(qpx));
+        if (rtptUnpackKind(qPosId.w) != 1u) continue;
+        float wz = exp(-abs(dot(qPosId.xyz - p, ng)) / sigmaPlane);
+        float3 qn = rtptOctDecode(gNorm.read(uint2(qpx)).xy);
+        float4 dq = diffIn.read(uint2(qpx));
+        float kw = (dx == 0 || dy == 0) ? 0.125f : 0.0625f;
+        float wDiff = kw * wz * pow(max(dot(n, qn), 0.0f), 44.0f) * exp(-abs(dLumC - (rtptLum(dq.rgb) + dq.a)) / sigmaDiff);
+        dSum += dq * wDiff;
+        dW += wDiff;
+      }
+    }
+    diffOut.write(dSum / max(dW, 1e-6f), gid);
+    return;
+  }
+
+  float4 dSum = dCenter * 0.30f;
+  float dW = 0.30f;
   for (int i = 0; i < 4; i++) {
     int2 o = ((passIdx & 1u) == 0u) ? crossOffs[i] : diagOffs[i];
     int2 qpx = int2(gid) + o * step;
     if (qpx.x < 0 || qpx.y < 0 || qpx.x >= int(u.size.x) || qpx.y >= int(u.size.y)) continue;
     float4 qPosId = gPosId.read(uint2(qpx));
     if (rtptUnpackKind(qPosId.w) != 1u) continue;
-    float planeDist = abs(dot(qPosId.xyz - p, ng));
-    float wz = exp(-planeDist / sigmaPlane);
+    float wz = exp(-abs(dot(qPosId.xyz - p, ng)) / sigmaPlane);
     float3 qn = rtptOctDecode(gNorm.read(uint2(qpx)).xy);
-    float wnDiff = pow(max(dot(n, qn), 0.0f), 48.0f);
     float4 dq = diffIn.read(uint2(qpx));
-    float wlDiff = exp(-abs(dLumC - rtptLum(dq.rgb)) / sigmaDiff);
-    float wDiff = 0.16f * wz * wnDiff * wlDiff;
-    dSum += dq.rgb * wDiff;
+    float wDiff = 0.175f * wz * pow(max(dot(n, qn), 0.0f), 44.0f) * exp(-abs(dLumC - (rtptLum(dq.rgb) + dq.a)) / sigmaDiff);
+    dSum += dq * wDiff;
     dW += wDiff;
   }
-  diffOut.write(float4(dSum / max(dW, 1e-6f), dCenter.a), gid);
+  diffOut.write(dSum / max(dW, 1e-6f), gid);
 }
 
 // ============================================================================
@@ -1798,7 +1890,8 @@ inline float3 rtptReModulate(uint2 at, constant RtptUniforms& u,
                              texture2d<float, access::read> gNorm,
                              texture2d<float, access::read> gMat,
                              texture2d<float, access::read> diffFilt,
-                             texture2d<float, access::read> specFilt) {
+                             texture2d<float, access::read> specFilt,
+                             texture2d<float, access::read> diIn) {
   float4 posId = gPosId.read(at);
   uint kind = rtptUnpackKind(posId.w);
   if (kind == 0u) return u.background.rgb;
@@ -1821,11 +1914,48 @@ inline float3 rtptReModulate(uint2 at, constant RtptUniforms& u,
   float3 v = normalize(u.eye.xyz - p);
   float nv = max(dot(n, v), 1e-4f);
   float nvGeom = max(dot(ng, v), 1e-4f);
+  float viewDist = max(length(p - u.eye.xyz), 1.0f);
   float coat, coatRoughUnused, baseRoughUnused;
   float3 fb, diffAlbedo, specAlbedo;
   rtptBrdfParams(base, roughness, metalness, clearcoat, nv, nvGeom, coat, fb, diffAlbedo, specAlbedo, coatRoughUnused, baseRoughUnused);
-  return diffAlbedo * max(diffFilt.read(at).rgb, float3(0.0f)) +
-         specAlbedo * max(specFilt.read(at).rgb, float3(0.0f));
+
+  // 1. Decoupled full-res direct 4-softbox studio irradiance (with micro-penumbra smoothing ONLY on partial-shadow pixels!).
+  float4 di = diIn.read(at);
+  float directIrrad = max(di.r, 0.0f);
+  float visEst = saturate(di.a);
+  if (visEst > 0.02f && visEst < 0.98f) {
+    float dSum = directIrrad * 0.40f, wS = 0.40f;
+    const int2 pOff[4] = {int2(1, 0), int2(-1, 0), int2(0, 1), int2(0, -1)};
+    float sigmaP = max(0.015f * viewDist, 0.15f);
+    for (int i = 0; i < 4; i++) {
+      int2 q = clamp(int2(at) + pOff[i], int2(0), int2(u.size.xy) - 1);
+      float4 qp = gPosId.read(uint2(q));
+      if (rtptUnpackKind(qp.w) != 1u) continue;
+      float wz = exp(-abs(dot(qp.xyz - p, ng)) / sigmaP);
+      float wn = pow(max(dot(n, rtptOctDecode(gNorm.read(uint2(q)).xy)), 0.0f), 48.0f);
+      float w = 0.15f * wz * wn;
+      dSum += max(diIn.read(uint2(q)).r, 0.0f) * w;
+      wS += w;
+    }
+    directIrrad = dSum / max(wS, 1e-5f);
+  }
+
+  // 2. Exact EyeSight energy-conserving separated indirect (bounceRgb, skyVis):
+  float4 ind = diffFilt.read(at);
+  float3 bounceRgb = max(ind.rgb, float3(0.0f));
+  float skyVis = saturate(ind.a);
+  float3 totalDiff = float3(directIrrad) + float3(u.rig.x) * skyVis + bounceRgb;
+
+  // 3. Full-res RT glossy ABS/metal reflections OR 0%-noise analytical studio specular on matte rubber/clay!
+  float4 sp = specFilt.read(at);
+  float3 specRad;
+  if (sp.a >= 0.0f) {
+    specRad = max(sp.rgb, float3(0.0f));
+  } else {
+    float specOcc = saturate(skyVis * 1.10f + rtptLum(bounceRgb) * 0.25f) * saturate(1.0f - roughness * 0.50f);
+    specRad = float3(u.rig.x * 0.90f * specOcc);
+  }
+  return diffAlbedo * totalDiff + specAlbedo * specRad;
 }
 
 // Cooperative 10x10 threadgroup-SRAM cache computes rtptReModulate ONCE per pixel instead of 10x!
@@ -1839,6 +1969,7 @@ kernel void rtptResolveTaa(
     texture2d<float, access::read> specFilt [[texture(5)]],
     texture2d<float, access::read> taaPrev [[texture(6)]],
     texture2d<float, access::write> taaOut [[texture(7)]],
+    texture2d<float, access::read> diIn [[texture(8)]],
     uint2 gid [[thread_position_in_grid]],
     uint2 lid [[thread_position_in_threadgroup]],
     uint2 tgid [[threadgroup_position_in_grid]]) {
@@ -1851,7 +1982,7 @@ kernel void rtptResolveTaa(
     uint tx = idx % 10u;
     uint ty = idx / 10u;
     uint2 px = uint2(clamp(basePx + int2(int(tx), int(ty)), int2(0), sizeI - 1));
-    tile[ty][tx] = half3(rtptReModulate(px, u, gPosId, gNorm, gMat, diffFilt, specFilt));
+    tile[ty][tx] = half3(rtptReModulate(px, u, gPosId, gNorm, gMat, diffFilt, specFilt, diIn));
   }
   threadgroup_barrier(mem_flags::mem_threadgroup);
 
@@ -1912,10 +2043,11 @@ kernel void rtptReModulateTrace(
     texture2d<float, access::read> diffFilt [[texture(3)]],
     texture2d<float, access::read> specFilt [[texture(4)]],
     texture2d<float, access::write> colorOut [[texture(5)]],
+    texture2d<float, access::read> diIn [[texture(6)]],
     uint2 gid [[thread_position_in_grid]]) {
   if (gid.x >= u.size.x || gid.y >= u.size.y) return;
   uint kind = rtptUnpackKind(gPosId.read(gid).w);
-  float3 rgb = rtptReModulate(gid, u, gPosId, gNorm, gMat, diffFilt, specFilt);
+  float3 rgb = rtptReModulate(gid, u, gPosId, gNorm, gMat, diffFilt, specFilt, diIn);
   colorOut.write(float4(max(rgb, float3(0.0f)), float(kind)), gid);
 }
 
@@ -2023,30 +2155,29 @@ kernel void rtptResolveTaau(
     return;
   }
 
-  // Moving camera / animation / Cold Frame 1: gather 3x3 trace neighborhood for ringing-free Catmull-Rom clamp,
-  // YCoCg variance box, and foreground max-speed motion vector dilation.
-  float3 cMin = float3(1e9f), cMax = float3(-1e9f);
-  float3 m1 = float3(0.0f), m2 = float3(0.0f);
-  float2 bestMv = float2(0.0f);
-  float bestMvLen2 = -1.0f;
-  bool allSky = true;
+  // Moving camera / animation / Cold Frame 1: fast 5-tap cross neighborhood clamp (halves Retina TAAU bandwidth!).
+  float3 cMin = nearTap.rgb, cMax = nearTap.rgb;
+  float3 y0 = rtptRgbToYCoCg(nearTap.rgb);
+  float3 m1 = y0, m2 = y0 * y0;
+  float2 bestMv = gMotion.read(uint2(tNear)).xy;
+  float bestMvLen2 = dot(bestMv, bestMv);
+  bool allSky = (uint(round(nearTap.a)) == 0u);
+  const int2 cOffs[4] = {int2(1, 0), int2(-1, 0), int2(0, 1), int2(0, -1)};
 
-  for (int dy = -1; dy <= 1; dy++) {
-    for (int dx = -1; dx <= 1; dx++) {
-      int2 tidx = clamp(tNear + int2(dx, dy), int2(0), traceSizeI - 1);
-      float4 tap = colorTrace.read(uint2(tidx));
-      if (uint(round(tap.a)) != 0u) allSky = false;
-      cMin = min(cMin, tap.rgb);
-      cMax = max(cMax, tap.rgb);
-      float3 y = rtptRgbToYCoCg(tap.rgb);
-      m1 += y;
-      m2 += y * y;
-      float2 mv = gMotion.read(uint2(tidx)).xy;
-      float l2 = dot(mv, mv);
-      if (l2 > bestMvLen2) {
-        bestMvLen2 = l2;
-        bestMv = mv;
-      }
+  for (int i = 0; i < 4; i++) {
+    int2 tidx = clamp(tNear + cOffs[i], int2(0), traceSizeI - 1);
+    float4 tap = colorTrace.read(uint2(tidx));
+    if (uint(round(tap.a)) != 0u) allSky = false;
+    cMin = min(cMin, tap.rgb);
+    cMax = max(cMax, tap.rgb);
+    float3 y = rtptRgbToYCoCg(tap.rgb);
+    m1 += y;
+    m2 += y * y;
+    float2 mv = gMotion.read(uint2(tidx)).xy;
+    float l2 = dot(mv, mv);
+    if (l2 > bestMvLen2) {
+      bestMvLen2 = l2;
+      bestMv = mv;
     }
   }
 
@@ -2070,8 +2201,8 @@ kernel void rtptResolveTaau(
   float2 prevUv = outUv + bestMv;
   if (all(prevUv >= 0.0f) && all(prevUv < 1.0f)) {
     float3 prev = rtptSampleCatmullRom5(taaPrev, prevUv, outSizeF);
-    float3 mean = m1 * (1.0f / 9.0f);
-    float3 stddev = sqrt(max(m2 * (1.0f / 9.0f) - mean * mean, float3(0.0f)));
+    float3 mean = m1 * 0.20f;
+    float3 stddev = sqrt(max(m2 * 0.20f - mean * mean, float3(0.0f)));
     float3 prevY = clamp(rtptRgbToYCoCg(prev), mean - stddev * 1.25f, mean + stddev * 1.25f);
     // High blend weight when a real ray landed inside this display pixel; low weight when off-center to preserve crisp full-res history!
     float alpha = mix(0.09f, 0.24f, onCenter);

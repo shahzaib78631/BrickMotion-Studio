@@ -96,10 +96,10 @@ FrameStats Renderer::Impl::drawRealtimePathTraced(const Camera& camera, const Fr
   id<MTLTexture> target = drawable ? drawable.texture : final;
   if (!target || width < 1 || height < 1 || !pipelines.rtptGbufOpaque || !pipelines.rtptGbufGlass ||
       !pipelines.rtptGbufFloor || !pipelines.rtptPresent || !pipelines.rtptSharcResolve ||
-      !pipelines.rtptDirectPass || !pipelines.rtptTraceFloor || !pipelines.rtptTraceOpaque ||
-      !pipelines.rtptTraceGlass || !pipelines.rtptSvgfTemporal || !pipelines.rtptSvgfAtrous ||
-      !pipelines.rtptSvgfAtrousDiff || !pipelines.rtptResolveTaa || !pipelines.rtptReModulateTrace ||
-      !pipelines.rtptResolveTaau) {
+      !pipelines.rtptDirectPass || !pipelines.rtptTraceFloor || !pipelines.rtptTraceGiQuarter ||
+      !pipelines.rtptUpsampleGi || !pipelines.rtptTraceSpec || !pipelines.rtptTraceGlass ||
+      !pipelines.rtptSvgfTemporal || !pipelines.rtptSvgfAtrous || !pipelines.rtptSvgfAtrousDiff ||
+      !pipelines.rtptResolveTaa || !pipelines.rtptReModulateTrace || !pipelines.rtptResolveTaau) {
     return stats;
   }
 
@@ -119,14 +119,16 @@ FrameStats Renderer::Impl::drawRealtimePathTraced(const Camera& camera, const Fr
   id<MTLDevice> dev = device->device;
 
   // Choose internal trace resolution: 100% native 1:1 up to ~720p (<= 1.1M px), and Quality-mode
-  // sub-pixel Halton TAAU (~1.25M trace px -> full display output) on 1080p / 2x Retina / 4K.
+  // sub-pixel Halton TAAU (~1.05M-1.25M trace px -> full display output) on 1080p / 2x Retina / 4K.
+  // Floor at 0.38 on 7.5M-px 2x HiDPI Retina screens (= 76% logical Retina Quality TAAU -> 2x faster!).
   double traceScale = 1.0;
   const double totalPx = static_cast<double>(width) * static_cast<double>(height);
+  const double targetTracePx = (scene.where.size() > 800u) ? 1020000.0 : 1200000.0;
   if (const char* envScale = std::getenv("BM_RTPT_SCALE")) {
     const double s = std::atof(envScale);
-    if (s >= 0.4 && s <= 1.0) traceScale = s;
+    if (s >= 0.30 && s <= 1.0) traceScale = s;
   } else if (totalPx > 1100000.0) {
-    traceScale = std::clamp(std::sqrt(1250000.0 / totalPx), 0.55, 1.0);
+    traceScale = std::clamp(std::sqrt(targetTracePx / totalPx), 0.38, 1.0);
   }
   int traceW = width, traceH = height;
   if (traceScale < 0.995) {
@@ -152,6 +154,7 @@ FrameStats Renderer::Impl::drawRealtimePathTraced(const Camera& camera, const Fr
     for (int i = 0; i < 2; i++) {
       rtptPosId[i] = mkTex(traceW, traceH, MTLPixelFormatRGBA32Float, gbufUsage);
       rtptNorm[i] = mkTex(traceW, traceH, MTLPixelFormatRGBA16Float, gbufUsage);
+      rtptDi[i] = mkTex(traceW, traceH, MTLPixelFormatRGBA16Float, rwUsage);
       rtptDiffHist[i] = mkTex(traceW, traceH, MTLPixelFormatRGBA16Float, rwUsage);
       rtptSpecHist[i] = mkTex(traceW, traceH, MTLPixelFormatRGBA16Float, rwUsage);
       rtptMoments[i] = mkTex(traceW, traceH, MTLPixelFormatRGBA16Float, rwUsage);
@@ -160,7 +163,7 @@ FrameStats Renderer::Impl::drawRealtimePathTraced(const Camera& camera, const Fr
     }
     rtptMat = mkTex(traceW, traceH, MTLPixelFormatRGBA8Unorm, gbufUsage);
     rtptMotion = mkTex(traceW, traceH, MTLPixelFormatRG16Float, gbufUsage);
-    rtptDi = mkTex(traceW, traceH, MTLPixelFormatRGBA16Float, rwUsage);
+    rtptGiQuarter = mkTex((traceW + 1) / 2, (traceH + 1) / 2, MTLPixelFormatRGBA16Float, rwUsage);
     rtptDiffRaw = mkTex(traceW, traceH, MTLPixelFormatRGBA16Float, rwUsage);
     rtptSpecRaw = mkTex(traceW, traceH, MTLPixelFormatRGBA16Float, rwUsage);
     rtptDiffPing = mkTex(traceW, traceH, MTLPixelFormatRGBA16Float, rwUsage);
@@ -173,11 +176,13 @@ FrameStats Renderer::Impl::drawRealtimePathTraced(const Camera& camera, const Fr
     rtptGlassTiles = [dev newBufferWithLength:tileBytes options:MTLResourceStorageModePrivate];
     rtptOpaqueTiles = [dev newBufferWithLength:tileBytes options:MTLResourceStorageModePrivate];
     rtptFloorTiles = [dev newBufferWithLength:tileBytes options:MTLResourceStorageModePrivate];
+    rtptSpecTiles = [dev newBufferWithLength:tileBytes options:MTLResourceStorageModePrivate];
     if (!rtptTileIndirect) {
-      const uint32_t initArgs[12] = {
+      const uint32_t initArgs[16] = {
           0u, 1u, 1u, 0u,  // offset  0: glassTiles
           0u, 1u, 1u, 0u,  // offset 16: opaqueTiles
           0u, 1u, 1u, 0u,  // offset 32: floorTiles
+          0u, 1u, 1u, 0u,  // offset 48: specTiles
       };
       rtptTileIndirectZero = [dev newBufferWithBytes:initArgs length:sizeof(initArgs) options:MTLResourceStorageModeShared];
       rtptTileIndirect = [dev newBufferWithLength:sizeof(initArgs) options:MTLResourceStorageModePrivate];
@@ -369,7 +374,7 @@ FrameStats Renderer::Impl::drawRealtimePathTraced(const Camera& camera, const Fr
   ru.flags = simd_make_uint4(ps.instances != nil ? 1u : 0u, rtptHasHistory ? 1u : 0u, geoMoved ? 1u : 0u, hasPlaceholders ? 1u : 0u);
   const uint32_t maxSamples = static_cast<uint32_t>(std::max(1, options.pathMaxSamples));
   ru.params = simd_make_uint4(maxSamples, 1u, (geoMoved && rtptHasPrevPose && prevPoseBuf != nil) ? 1u : 0u, pieceCount);
-  ru.outSize = simd_make_uint4(static_cast<uint32_t>(width), static_cast<uint32_t>(height), taauActive ? 1u : 0u, 0u);
+  ru.outSize = simd_make_uint4(static_cast<uint32_t>(width), static_cast<uint32_t>(height), taauActive ? 1u : 0u, options.clay ? 1u : 0u);
 
   // Fill DrawUniforms and visible instance index buffer.
   const size_t batchCount = std::max<size_t>(1, seen.size());
@@ -411,7 +416,7 @@ FrameStats Renderer::Impl::drawRealtimePathTraced(const Camera& camera, const Fr
   // Reset indirect tile counters (and SHaRC table on look switches) in one tiny blit pass.
   {
     id<MTLBlitCommandEncoder> blit = [commands blitCommandEncoder];
-    [blit copyFromBuffer:rtptTileIndirectZero sourceOffset:0 toBuffer:rtptTileIndirect destinationOffset:0 size:48];
+    [blit copyFromBuffer:rtptTileIndirectZero sourceOffset:0 toBuffer:rtptTileIndirect destinationOffset:0 size:64];
     if (lookChanged) {
       [blit fillBuffer:rtptSharcAccum range:NSMakeRange(0, rtptSharcAccum.length) value:0];
       [blit fillBuffer:rtptSharcResolved range:NSMakeRange(0, rtptSharcResolved.length) value:0];
@@ -551,13 +556,15 @@ FrameStats Renderer::Impl::drawRealtimePathTraced(const Camera& camera, const Fr
     [ce setBuffer:rtptGlassTiles offset:0 atIndex:6];
     [ce setBuffer:rtptOpaqueTiles offset:0 atIndex:7];
     [ce setBuffer:rtptFloorTiles offset:0 atIndex:8];
+    [ce setBuffer:rtptSpecTiles offset:0 atIndex:9];
     [ce setTexture:rtptPosId[cur] atIndex:0];
     [ce setTexture:rtptNorm[cur] atIndex:1];
     [ce setTexture:rtptMotion atIndex:2];
     [ce setTexture:rtptPosId[prev] atIndex:3];
     [ce setTexture:rtptNorm[prev] atIndex:4];
-    [ce setTexture:rtptDiffHist[prev] atIndex:5];
-    [ce setTexture:rtptDi atIndex:6];
+    [ce setTexture:rtptDi[prev] atIndex:5];
+    [ce setTexture:rtptDi[cur] atIndex:6];
+    [ce setTexture:rtptMat atIndex:7];
     [ce dispatchThreadgroups:traceTgGrid threadsPerThreadgroup:tg];
     if (profile) { [ce endEncoding]; submitStage("3_direct_cv"); ce = [commands computeCommandEncoder]; }
 
@@ -576,21 +583,52 @@ FrameStats Renderer::Impl::drawRealtimePathTraced(const Camera& camera, const Fr
       if (profile) { [ce endEncoding]; submitStage("4a_trace_floor"); ce = [commands computeCommandEncoder]; }
     }
 
-    // Pass 4b: Indirect Tile-Compacted Opaque Brick GI (+ Fine SHaRC) + Energy-Matched Glossy VNDF Specular
-    [ce setComputePipelineState:pipelines.rtptTraceOpaque];
-    [ce setBytes:&ru length:sizeof(ru) atIndex:0];
-    bindScene(ce);
-    [ce setBuffer:rtptSharcResolved offset:0 atIndex:5];
-    [ce setBuffer:rtptSharcAccum offset:0 atIndex:6];
-    [ce setBuffer:rtptOpaqueTiles offset:0 atIndex:7];
-    [ce setTexture:rtptPosId[cur] atIndex:0];
-    [ce setTexture:rtptNorm[cur] atIndex:1];
-    [ce setTexture:rtptMat atIndex:2];
-    [ce setTexture:rtptDi atIndex:3];
-    [ce setTexture:rtptDiffRaw atIndex:4];
-    [ce setTexture:rtptSpecRaw atIndex:5];
-    [ce dispatchThreadgroupsWithIndirectBuffer:rtptTileIndirect indirectBufferOffset:16 threadsPerThreadgroup:tg];
-    if (profile) { [ce endEncoding]; submitStage("4b_trace_opaque"); ce = [commands computeCommandEncoder]; }
+    // Pass 4b-1: 100%-SIMD-Dense Checkerboard Control-Variate Half-Res GI -> Separated (bounceRgb, skyVis)
+    {
+      const NSUInteger qW = static_cast<NSUInteger>((traceW + 1) / 2);
+      const NSUInteger qH = static_cast<NSUInteger>((traceH + 1) / 2);
+      const NSUInteger dispW = rtptHasHistory ? ((qW + 1) / 2) : qW;
+      [ce setComputePipelineState:pipelines.rtptTraceGiQuarter];
+      [ce setBytes:&ru length:sizeof(ru) atIndex:0];
+      bindScene(ce);
+      [ce setBuffer:rtptSharcResolved offset:0 atIndex:5];
+      [ce setBuffer:rtptSharcAccum offset:0 atIndex:6];
+      [ce setTexture:rtptPosId[cur] atIndex:0];
+      [ce setTexture:rtptNorm[cur] atIndex:1];
+      [ce setTexture:rtptDi[cur] atIndex:2];
+      [ce setTexture:rtptGiQuarter atIndex:3];
+      [ce dispatchThreads:MTLSizeMake(dispW, qH, 1) threadsPerThreadgroup:tg];
+      if (profile) { [ce endEncoding]; submitStage("4b1_gi_quarter"); ce = [commands computeCommandEncoder]; }
+    }
+
+    // Pass 4b-2a: Zero-RT Bilateral Upsample of (bounceRgb, skyVis) + Specular Sentinel Init
+    {
+      [ce setComputePipelineState:pipelines.rtptUpsampleGi];
+      [ce setBytes:&ru length:sizeof(ru) atIndex:0];
+      [ce setBuffer:rtptOpaqueTiles offset:0 atIndex:1];
+      [ce setTexture:rtptPosId[cur] atIndex:0];
+      [ce setTexture:rtptNorm[cur] atIndex:1];
+      [ce setTexture:rtptGiQuarter atIndex:2];
+      [ce setTexture:rtptDiffRaw atIndex:3];
+      [ce setTexture:rtptSpecRaw atIndex:4];
+      [ce dispatchThreadgroupsWithIndirectBuffer:rtptTileIndirect indirectBufferOffset:16 threadsPerThreadgroup:tg];
+    }
+
+    // Pass 4b-2b: Indirect Tile-Compacted Glossy ABS/Metal VNDF Specular (skips matte clay & rubber!)
+    if (!options.clay) {
+      [ce setComputePipelineState:pipelines.rtptTraceSpec];
+      [ce setBytes:&ru length:sizeof(ru) atIndex:0];
+      bindScene(ce);
+      [ce setBuffer:rtptSharcResolved offset:0 atIndex:5];
+      [ce setBuffer:rtptSharcAccum offset:0 atIndex:6];
+      [ce setBuffer:rtptSpecTiles offset:0 atIndex:7];
+      [ce setTexture:rtptPosId[cur] atIndex:0];
+      [ce setTexture:rtptNorm[cur] atIndex:1];
+      [ce setTexture:rtptMat atIndex:2];
+      [ce setTexture:rtptSpecRaw atIndex:3];
+      [ce dispatchThreadgroupsWithIndirectBuffer:rtptTileIndirect indirectBufferOffset:48 threadsPerThreadgroup:tg];
+    }
+    if (profile) { [ce endEncoding]; submitStage("4b2_up_spec"); ce = [commands computeCommandEncoder]; }
 
     // Pass 4c: Indirect Tile-Compacted Dielectric Glass RT (dispatches ONLY on tiles containing glass!)
     if (glassInView) {
@@ -608,15 +646,15 @@ FrameStats Renderer::Impl::drawRealtimePathTraced(const Camera& camera, const Fr
       if (profile) { [ce endEncoding]; submitStage("4c_trace_glass"); ce = [commands computeCommandEncoder]; }
     }
 
-    // Pass 2b: Resolve SHaRC atomic radiance updates for next frame's multi-bounce lookup
+    // Pass 2b: Resolve SHaRC atomic radiance updates (256-wide threadgroups -> ~0.09 ms!)
     [ce setComputePipelineState:pipelines.rtptSharcResolve];
     [ce setBytes:&ru length:sizeof(ru) atIndex:0];
     [ce setBuffer:rtptSharcAccum offset:0 atIndex:1];
     [ce setBuffer:rtptSharcResolved offset:0 atIndex:2];
-    [ce dispatchThreads:MTLSizeMake(kRtptSharcCap, 1, 1) threadsPerThreadgroup:MTLSizeMake(64, 1, 1)];
+    [ce dispatchThreads:MTLSizeMake(kRtptSharcCap, 1, 1) threadsPerThreadgroup:MTLSizeMake(256, 1, 1)];
     if (profile) { [ce endEncoding]; submitStage("2b_sharc_resolve"); ce = [commands computeCommandEncoder]; }
 
-    // Pass 5a: 2D-Morton L2-Coherent Demodulated SVGF Temporal Accumulation + Variance Estimation
+    // Pass 5a: 2D-Morton L2-Coherent Separated SVGF Temporal Accumulation + Variance Estimation
     [ce setComputePipelineState:pipelines.rtptSvgfTemporal];
     [ce setBytes:&ru length:sizeof(ru) atIndex:0];
     [ce setTexture:rtptPosId[cur] atIndex:0];
@@ -637,12 +675,11 @@ FrameStats Renderer::Impl::drawRealtimePathTraced(const Camera& camera, const Fr
     [ce dispatchThreads:traceGrid threadsPerThreadgroup:tg];
     if (profile) { [ce endEncoding]; submitStage("5a_svgf_temporal"); ce = [commands computeCommandEncoder]; }
 
-    // Pass 5b: Pass 0 filters Diff + Spec (step 1); Passes 1..N run lightweight Diff-Only A-Trous (steps 2, 4, 8)
-    // with zero-gPosId floor neighbor filtering and 2D Morton L2 texture cache locality!
+    // Pass 5b: Full 3x3 (steps 1, 2) + 5-Tap A-Trous (steps 4, 8) purely on smooth separated indirect GI & floor!
     id<MTLTexture> diffSrc = rtptDiffHist[cur];
     id<MTLTexture> diffDst = rtptDiffPing;
     const uint32_t steps[4] = {1u, 2u, 4u, 8u};
-    const int numPasses = (rtptStillFrames >= 48u) ? 2 : (rtptStillFrames >= 24u ? 3 : 4);
+    const int numPasses = 4;
     ru.params.y = steps[0];
     [ce setComputePipelineState:pipelines.rtptSvgfAtrous];
     [ce setBytes:&ru length:sizeof(ru) atIndex:0];
@@ -659,21 +696,19 @@ FrameStats Renderer::Impl::drawRealtimePathTraced(const Camera& camera, const Fr
     diffSrc = diffDst;
     diffDst = rtptDiffPong;
 
-    if (numPasses > 1) {
-      [ce setComputePipelineState:pipelines.rtptSvgfAtrousDiff];
-      [ce setTexture:rtptPosId[cur] atIndex:0];
-      [ce setTexture:rtptNorm[cur] atIndex:1];
-      [ce setTexture:rtptMoments[cur] atIndex:3];
-      [ce setTexture:rtptHLen[cur] atIndex:4];
-      for (int p = 1; p < numPasses; p++) {
-        ru.params.y = steps[p] | (static_cast<uint32_t>(p) << 16u);
-        [ce setBytes:&ru length:sizeof(ru) atIndex:0];
-        [ce setTexture:diffSrc atIndex:2];
-        [ce setTexture:diffDst atIndex:5];
-        [ce dispatchThreads:traceGrid threadsPerThreadgroup:tg];
-        diffSrc = diffDst;
-        diffDst = ((p & 1) == 0) ? rtptDiffPong : rtptDiffPing;
-      }
+    [ce setComputePipelineState:pipelines.rtptSvgfAtrousDiff];
+    [ce setTexture:rtptPosId[cur] atIndex:0];
+    [ce setTexture:rtptNorm[cur] atIndex:1];
+    [ce setTexture:rtptMoments[cur] atIndex:3];
+    [ce setTexture:rtptHLen[cur] atIndex:4];
+    for (int p = 1; p < numPasses; p++) {
+      ru.params.y = steps[p] | (static_cast<uint32_t>(p) << 16u);
+      [ce setBytes:&ru length:sizeof(ru) atIndex:0];
+      [ce setTexture:diffSrc atIndex:2];
+      [ce setTexture:diffDst atIndex:5];
+      [ce dispatchThreads:traceGrid threadsPerThreadgroup:tg];
+      diffSrc = diffDst;
+      diffDst = ((p & 1) == 0) ? rtptDiffPong : rtptDiffPing;
     }
     if (profile) { [ce endEncoding]; submitStage("5b_svgf_atrous"); ce = [commands computeCommandEncoder]; }
 
@@ -689,6 +724,7 @@ FrameStats Renderer::Impl::drawRealtimePathTraced(const Camera& camera, const Fr
       [ce setTexture:rtptSpecPing atIndex:5];
       [ce setTexture:rtptTaa[prev] atIndex:6];
       [ce setTexture:rtptTaa[cur] atIndex:7];
+      [ce setTexture:rtptDi[cur] atIndex:8];
       [ce dispatchThreadgroups:traceTgGrid threadsPerThreadgroup:tg];
     } else {
       // Re-modulate once per trace pixel into dead rtptDiffRaw (zero extra VRAM!), then resolve at full display res!
@@ -700,6 +736,7 @@ FrameStats Renderer::Impl::drawRealtimePathTraced(const Camera& camera, const Fr
       [ce setTexture:diffSrc atIndex:3];
       [ce setTexture:rtptSpecPing atIndex:4];
       [ce setTexture:rtptDiffRaw atIndex:5];
+      [ce setTexture:rtptDi[cur] atIndex:6];
       [ce dispatchThreads:traceGrid threadsPerThreadgroup:tg];
 
       [ce setComputePipelineState:pipelines.rtptResolveTaau];

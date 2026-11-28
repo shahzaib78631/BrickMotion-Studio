@@ -347,7 +347,7 @@ struct WorldRenderer::Impl {
 
   // Pipelines
   id<MTLRenderPipelineState> gbufOpaque = nil, gbufGlass = nil, gbufFloor = nil, present = nil;
-  id<MTLComputePipelineState> sharcResolve = nil, directPass = nil, traceFloor = nil, traceGiQuarter = nil, traceOpaque = nil, traceGlass = nil;
+  id<MTLComputePipelineState> prefilterEnv = nil, sharcResolve = nil, directPass = nil, traceFloor = nil, traceGiQuarter = nil, upsampleGi = nil, traceSpec = nil, traceGlass = nil;
   id<MTLComputePipelineState> svgfTemporal = nil, svgfAtrous = nil, svgfAtrousDiff = nil, reModulate = nil, resolveTaau = nil;
   id<MTLDepthStencilState> depthWrite = nil, depthNone = nil;
 
@@ -365,7 +365,9 @@ struct WorldRenderer::Impl {
   id<MTLAccelerationStructure> tlas = nil;
   id<MTLTexture> dummyWhite = nil;
   id<MTLTexture> envTex = nil;
+  id<MTLTexture> envMips = nil;
   bool hasHdr = false;
+  float envSunDir[3] = {0.22f, 0.82f, 0.52f};
   std::vector<id<MTLTexture>> bindlessTextures;
   std::vector<id<MTLResource>> allRayResources;
 
@@ -376,7 +378,7 @@ struct WorldRenderer::Impl {
   id<MTLTexture> gDepth = nil;
   id<MTLTexture> gPosId[2] = {nil, nil}, gNorm[2] = {nil, nil};
   id<MTLTexture> gMat = nil, gMotion = nil;
-  id<MTLTexture> diTex = nil, giQuarter = nil, diffRaw = nil, specRaw = nil;
+  id<MTLTexture> diTex[2] = {nil, nil}, giQuarter = nil, diffRaw = nil, specRaw = nil;
   id<MTLTexture> diffHist[2] = {nil, nil}, specHist[2] = {nil, nil};
   id<MTLTexture> moments[2] = {nil, nil}, hLen[2] = {nil, nil};
   id<MTLTexture> diffPing = nil, specPing = nil, diffPong = nil;
@@ -384,7 +386,7 @@ struct WorldRenderer::Impl {
   id<MTLTexture> taa[2] = {nil, nil};
   id<MTLBuffer> sharcAccum = nil, sharcResolved = nil;
   id<MTLBuffer> tileIndirect = nil, tileIndirectZero = nil;
-  id<MTLBuffer> glassTiles = nil, opaqueTiles = nil, floorTiles = nil;
+  id<MTLBuffer> glassTiles = nil, opaqueTiles = nil, floorTiles = nil, specTiles = nil;
 
   // Temporal state
   uint32_t frameIdx = 0;
@@ -400,6 +402,7 @@ struct WorldRenderer::Impl {
 
   bool buildPipelines(std::string& err);
   bool uploadScene(const WorldAsset& asset, std::string& err);
+  void rebuildEnvMips(const float sunDir[3]);
   void ensureTargets(int w, int h, int tw, int th);
   FrameStats drawFrame(const Camera& camera, const WorldFrameOptions& options, id<CAMetalDrawable> drawable);
 };
@@ -455,11 +458,13 @@ bool WorldRenderer::Impl::buildPipelines(std::string& err) {
       if (!present && err.empty()) err = e ? e.localizedDescription.UTF8String : "failed wrPresent pipeline";
     }
   }
+  prefilterEnv = makeCompute(@"wrPrefilterEnv");
   sharcResolve = makeCompute(@"wrSharcResolve");
   directPass = makeCompute(@"wrDirectPass");
   traceFloor = makeCompute(@"wrTraceFloor");
   traceGiQuarter = makeCompute(@"wrTraceGiQuarter");
-  traceOpaque = makeCompute(@"wrTraceOpaque");
+  upsampleGi = makeCompute(@"wrUpsampleGi");
+  traceSpec = makeCompute(@"wrTraceSpec");
   traceGlass = makeCompute(@"wrTraceGlass");
   svgfTemporal = makeCompute(@"wrSvgfTemporal");
   svgfAtrous = makeCompute(@"wrSvgfAtrous");
@@ -475,9 +480,52 @@ bool WorldRenderer::Impl::buildPipelines(std::string& err) {
   ds.depthWriteEnabled = NO;
   depthNone = [dev newDepthStencilStateWithDescriptor:ds];
 
-  return gbufOpaque && gbufGlass && gbufFloor && present && sharcResolve && directPass && traceFloor &&
-         traceGiQuarter && traceOpaque && traceGlass && svgfTemporal && svgfAtrous && svgfAtrousDiff && reModulate &&
+  return gbufOpaque && gbufGlass && gbufFloor && present && prefilterEnv && sharcResolve && directPass && traceFloor &&
+         traceGiQuarter && upsampleGi && traceSpec && traceGlass && svgfTemporal && svgfAtrous && svgfAtrousDiff && reModulate &&
          resolveTaau && depthWrite && depthNone;
+}
+
+void WorldRenderer::Impl::rebuildEnvMips(const float sunDir[3]) {
+  if (!prefilterEnv || !envTex) return;
+  id<MTLDevice> dev = device->device;
+  if (!envMips) {
+    MTLTextureDescriptor* d = [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:MTLPixelFormatRGBA16Float
+                                                                                 width:512
+                                                                                height:256
+                                                                             mipmapped:YES];
+    d.mipmapLevelCount = 6;
+    d.usage = MTLTextureUsageShaderRead | MTLTextureUsageShaderWrite;
+    d.storageMode = MTLStorageModePrivate;
+    envMips = [dev newTextureWithDescriptor:d];
+  }
+  struct WrEnvPrefilterParamsGpu {
+    simd_float4 sunDirHasHdr;
+    simd_uint4 mipInfo;
+  };
+  envSunDir[0] = sunDir[0];
+  envSunDir[1] = sunDir[1];
+  envSunDir[2] = sunDir[2];
+  id<MTLCommandBuffer> cmd = [device->queue commandBuffer];
+  id<MTLComputeCommandEncoder> ce = [cmd computeCommandEncoder];
+  [ce setComputePipelineState:prefilterEnv];
+  [ce setTexture:envTex atIndex:0];
+  for (uint32_t mip = 0; mip < 6u; mip++) {
+    const uint32_t mw = std::max(1u, 512u >> mip);
+    const uint32_t mh = std::max(1u, 256u >> mip);
+    id<MTLTexture> view = [envMips newTextureViewWithPixelFormat:MTLPixelFormatRGBA16Float
+                                                     textureType:MTLTextureType2D
+                                                          levels:NSMakeRange(mip, 1)
+                                                          slices:NSMakeRange(0, 1)];
+    WrEnvPrefilterParamsGpu p{};
+    p.sunDirHasHdr = simd_make_float4(sunDir[0], sunDir[1], sunDir[2], hasHdr ? 1.0f : 0.0f);
+    p.mipInfo = simd_make_uint4(mw, mh, mip, 0u);
+    [ce setBytes:&p length:sizeof(p) atIndex:0];
+    [ce setTexture:view atIndex:1];
+    [ce dispatchThreads:MTLSizeMake(mw, mh, 1) threadsPerThreadgroup:MTLSizeMake(8, 8, 1)];
+  }
+  [ce endEncoding];
+  [cmd commit];
+  [cmd waitUntilCompleted];
 }
 
 bool WorldRenderer::Impl::uploadScene(const WorldAsset& asset, std::string& err) {
@@ -881,6 +929,10 @@ bool WorldRenderer::Impl::uploadScene(const WorldAsset& asset, std::string& err)
   }
   for (id<MTLTexture> t : bindlessTextures) allRayResources.push_back(t);
 
+  // Precompute 6-mip GGX specular + diffuse irradiance IBL pyramid for procedural sky (rebuilt on loadEnvironmentHdr).
+  const float defaultSun[3] = {0.22f, 0.82f, 0.52f};
+  rebuildEnvMips(defaultSun);
+
   return true;
 }
 
@@ -904,6 +956,7 @@ void WorldRenderer::Impl::ensureTargets(int w, int h, int tw, int th) {
   for (int i = 0; i < 2; i++) {
     gPosId[i] = mkTex(tw, th, MTLPixelFormatRGBA32Float, gbufUsage);
     gNorm[i] = mkTex(tw, th, MTLPixelFormatRGBA16Float, gbufUsage);
+    diTex[i] = mkTex(tw, th, MTLPixelFormatRGBA16Float, rwUsage);
     diffHist[i] = mkTex(tw, th, MTLPixelFormatRGBA16Float, rwUsage);
     specHist[i] = mkTex(tw, th, MTLPixelFormatRGBA16Float, rwUsage);
     moments[i] = mkTex(tw, th, MTLPixelFormatRGBA16Float, rwUsage);
@@ -912,7 +965,6 @@ void WorldRenderer::Impl::ensureTargets(int w, int h, int tw, int th) {
   }
   gMat = mkTex(tw, th, MTLPixelFormatRGBA16Float, gbufUsage);
   gMotion = mkTex(tw, th, MTLPixelFormatRG16Float, gbufUsage);
-  diTex = mkTex(tw, th, MTLPixelFormatRGBA16Float, rwUsage);
   giQuarter = mkTex((tw + 1) / 2, (th + 1) / 2, MTLPixelFormatRGBA16Float, rwUsage);
   diffRaw = mkTex(tw, th, MTLPixelFormatRGBA16Float, rwUsage);
   specRaw = mkTex(tw, th, MTLPixelFormatRGBA16Float, rwUsage);
@@ -927,8 +979,10 @@ void WorldRenderer::Impl::ensureTargets(int w, int h, int tw, int th) {
   glassTiles = [dev newBufferWithLength:tileBytes options:MTLResourceStorageModePrivate];
   opaqueTiles = [dev newBufferWithLength:tileBytes options:MTLResourceStorageModePrivate];
   floorTiles = [dev newBufferWithLength:tileBytes options:MTLResourceStorageModePrivate];
+  specTiles = [dev newBufferWithLength:tileBytes options:MTLResourceStorageModePrivate];
   if (!tileIndirect) {
-    const uint32_t initArgs[12] = {
+    const uint32_t initArgs[16] = {
+        0u, 1u, 1u, 0u,
         0u, 1u, 1u, 0u,
         0u, 1u, 1u, 0u,
         0u, 1u, 1u, 0u,
@@ -961,15 +1015,16 @@ FrameStats WorldRenderer::Impl::drawFrame(const Camera& cameraIn, const WorldFra
   const auto started = std::chrono::steady_clock::now();
   if (width < 1 || height < 1) return stats;
 
-  // Choose internal trace resolution: 100% native 1:1 up to ~720p (<= 1.1M px), and Quality-mode
-  // sub-pixel Halton TAAU (~1.25M trace px -> full display output) on 1080p / 2x Retina / 4K.
+  // Adaptive internal trace resolution: native 1:1 up to ~720p, Quality-mode Halton TAAU on 1080p/Retina/4K.
+  // Floor at 0.35 on 7.7M-px 2x HiDPI Retina screens (= 70% logical Retina Quality TAAU, ~915k trace px -> 30-45+ FPS live!).
   double traceScale = 1.0;
   const double totalPx = static_cast<double>(width) * static_cast<double>(height);
+  const double targetTracePx = (totalTriangles > 1500000ULL) ? 920000.0 : 1250000.0;
   if (const char* envScale = std::getenv("BM_RTPT_SCALE")) {
     const double s = std::atof(envScale);
-    if (s >= 0.4 && s <= 1.0) traceScale = s;
-  } else if (totalPx > 1100000.0) {
-    traceScale = std::clamp(std::sqrt(1250000.0 / totalPx), 0.55, 1.0);
+    if (s >= 0.30 && s <= 1.0) traceScale = s;
+  } else if (totalPx > targetTracePx) {
+    traceScale = std::clamp(std::sqrt(targetTracePx / totalPx), 0.35, 1.0);
   }
   int tw = width, th = height;
   if (traceScale < 0.995) {
@@ -1034,9 +1089,15 @@ FrameStats WorldRenderer::Impl::drawFrame(const Camera& cameraIn, const WorldFra
   bm::Vec3 right, up, forward;
   camBasis(camera, right, up, forward);
 
-  // Normalize sun direction.
+  // Normalize sun direction and rebuild procedural sky IBL mip pyramid if sun moved without HDRI.
   bm::Vec3 sunD{options.sunDir[0], options.sunDir[1], options.sunDir[2]};
   sunD = bm::length(sunD) > 1e-6 ? bm::normalized(sunD) : bm::Vec3{0.22, 0.82, 0.52};
+  if (!hasHdr && (std::abs(envSunDir[0] - static_cast<float>(sunD.x)) > 1e-3f ||
+                  std::abs(envSunDir[1] - static_cast<float>(sunD.y)) > 1e-3f ||
+                  std::abs(envSunDir[2] - static_cast<float>(sunD.z)) > 1e-3f)) {
+    const float sd[3] = {static_cast<float>(sunD.x), static_cast<float>(sunD.y), static_cast<float>(sunD.z)};
+    rebuildEnvMips(sd);
+  }
 
   // Studio 4-softbox rig in +Y UP space (matching BrickMotion's crisp white-studio product look!).
   bm::Vec3 ahead = {forward.x, 0.0, forward.z};
@@ -1103,7 +1164,7 @@ FrameStats WorldRenderer::Impl::drawFrame(const Camera& cameraIn, const WorldFra
   // Reset indirect tile counters (and SHaRC cache on look switches).
   {
     id<MTLBlitCommandEncoder> blit = [cmd blitCommandEncoder];
-    [blit copyFromBuffer:tileIndirectZero sourceOffset:0 toBuffer:tileIndirect destinationOffset:0 size:48];
+    [blit copyFromBuffer:tileIndirectZero sourceOffset:0 toBuffer:tileIndirect destinationOffset:0 size:64];
     if (lookChanged) {
       [blit fillBuffer:sharcAccum range:NSMakeRange(0, sharcAccum.length) value:0];
       [blit fillBuffer:sharcResolved range:NSMakeRange(0, sharcResolved.length) value:0];
@@ -1211,13 +1272,15 @@ FrameStats WorldRenderer::Impl::drawFrame(const Camera& cameraIn, const WorldFra
     [ce setBuffer:opaqueTiles offset:0 atIndex:7];
     [ce setBuffer:floorTiles offset:0 atIndex:8];
     [ce setBuffer:rtGeomMeshes offset:0 atIndex:9];
+    [ce setBuffer:specTiles offset:0 atIndex:10];
     [ce setTexture:gPosId[cur] atIndex:0];
     [ce setTexture:gNorm[cur] atIndex:1];
     [ce setTexture:gMotion atIndex:2];
     [ce setTexture:gPosId[prev] atIndex:3];
     [ce setTexture:gNorm[prev] atIndex:4];
-    [ce setTexture:diffHist[prev] atIndex:5];
-    [ce setTexture:diTex atIndex:6];
+    [ce setTexture:diTex[prev] atIndex:5];
+    [ce setTexture:diTex[cur] atIndex:6];
+    [ce setTexture:gMat atIndex:7];
     bindRayResources(ce);
     [ce dispatchThreadgroups:tileGroups threadsPerThreadgroup:tg];
     [ce endEncoding];
@@ -1246,8 +1309,11 @@ FrameStats WorldRenderer::Impl::drawFrame(const Camera& cameraIn, const WorldFra
   }
   submitStage("4a. Floor");
 
-  // PASS 4b-1: 100%-SIMD-Dense Half-Res Rotating 2x2 Diffuse GI + SHaRC Radiance Cache
+  // PASS 4b-1: 100%-SIMD-Dense Checkerboard Control-Variate Half-Res GI -> Separated (bounceRgb, skyVis)
   {
+    const NSUInteger qW = static_cast<NSUInteger>((traceW + 1) / 2);
+    const NSUInteger qH = static_cast<NSUInteger>((traceH + 1) / 2);
+    const NSUInteger dispW = hasHistory ? ((qW + 1) / 2) : qW;
     id<MTLComputeCommandEncoder> ce = [cmd computeCommandEncoder];
     [ce setComputePipelineState:traceGiQuarter];
     [ce setBytes:&u length:sizeof(u) atIndex:0];
@@ -1260,21 +1326,34 @@ FrameStats WorldRenderer::Impl::drawFrame(const Camera& cameraIn, const WorldFra
     [ce setBuffer:rtGeomMeshes offset:0 atIndex:7];
     [ce setTexture:gPosId[cur] atIndex:0];
     [ce setTexture:gNorm[cur] atIndex:1];
-    [ce setTexture:diTex atIndex:2];
-    [ce setTexture:envTex atIndex:3];
+    [ce setTexture:diTex[cur] atIndex:2];
+    [ce setTexture:envMips atIndex:3];
     [ce setTexture:giQuarter atIndex:4];
     bindRayResources(ce);
-    [ce dispatchThreads:MTLSizeMake(static_cast<NSUInteger>((traceW + 1) / 2),
-                                    static_cast<NSUInteger>((traceH + 1) / 2), 1)
-        threadsPerThreadgroup:tg];
+    [ce dispatchThreads:MTLSizeMake(dispW, qH, 1) threadsPerThreadgroup:tg];
     [ce endEncoding];
   }
   submitStage("4b1. GIQuarter");
 
-  // PASS 4b-2: Bilateral GI Upsample + Crisp Direct Light + Full-Res Glossy/Clearcoat Specular
+  // PASS 4b-2a: Zero-RT Bilateral Upsample of (bounceRgb, skyVis) + Specular Sentinel Init (~0.35 ms)
   {
     id<MTLComputeCommandEncoder> ce = [cmd computeCommandEncoder];
-    [ce setComputePipelineState:traceOpaque];
+    [ce setComputePipelineState:upsampleGi];
+    [ce setBytes:&u length:sizeof(u) atIndex:0];
+    [ce setBuffer:opaqueTiles offset:0 atIndex:1];
+    [ce setTexture:gPosId[cur] atIndex:0];
+    [ce setTexture:gNorm[cur] atIndex:1];
+    [ce setTexture:giQuarter atIndex:2];
+    [ce setTexture:diffRaw atIndex:3];
+    [ce setTexture:specRaw atIndex:4];
+    [ce dispatchThreadgroupsWithIndirectBuffer:tileIndirect indirectBufferOffset:16 threadsPerThreadgroup:tg];
+    [ce endEncoding];
+  }
+
+  // PASS 4b-2b: Indirect Tile-Compacted Mirror / Clearcoat / Polished-Metal-Only RT Specular
+  if (!options.clay) {
+    id<MTLComputeCommandEncoder> ce = [cmd computeCommandEncoder];
+    [ce setComputePipelineState:traceSpec];
     [ce setBytes:&u length:sizeof(u) atIndex:0];
     [ce setAccelerationStructure:tlas atBufferIndex:1];
     [ce setBuffer:rtInstanceTable offset:0 atIndex:2];
@@ -1282,21 +1361,18 @@ FrameStats WorldRenderer::Impl::drawFrame(const Camera& cameraIn, const WorldFra
     [ce setBuffer:materialTable offset:0 atIndex:4];
     [ce setBuffer:sharcResolved offset:0 atIndex:5];
     [ce setBuffer:sharcAccum offset:0 atIndex:6];
-    [ce setBuffer:opaqueTiles offset:0 atIndex:7];
+    [ce setBuffer:specTiles offset:0 atIndex:7];
     [ce setBuffer:rtGeomMeshes offset:0 atIndex:8];
     [ce setTexture:gPosId[cur] atIndex:0];
     [ce setTexture:gNorm[cur] atIndex:1];
     [ce setTexture:gMat atIndex:2];
-    [ce setTexture:diTex atIndex:3];
-    [ce setTexture:envTex atIndex:4];
-    [ce setTexture:diffRaw atIndex:5];
-    [ce setTexture:specRaw atIndex:6];
-    [ce setTexture:giQuarter atIndex:7];
+    [ce setTexture:envMips atIndex:3];
+    [ce setTexture:specRaw atIndex:4];
     bindRayResources(ce);
-    [ce dispatchThreadgroupsWithIndirectBuffer:tileIndirect indirectBufferOffset:16 threadsPerThreadgroup:tg];
+    [ce dispatchThreadgroupsWithIndirectBuffer:tileIndirect indirectBufferOffset:48 threadsPerThreadgroup:tg];
     [ce endEncoding];
   }
-  submitStage("4b2. OpaqueSpec");
+  submitStage("4b2. Up+Spec");
 
   // PASS 4c: Indirect Tile-Compacted 16-Bounce Beer-Lambert Volume Glass
   if (hasGlass && !options.clay) {
@@ -1313,7 +1389,7 @@ FrameStats WorldRenderer::Impl::drawFrame(const Camera& cameraIn, const WorldFra
     [ce setBuffer:rtGeomMeshes offset:0 atIndex:8];
     [ce setTexture:gPosId[cur] atIndex:0];
     [ce setTexture:gNorm[cur] atIndex:1];
-    [ce setTexture:envTex atIndex:2];
+    [ce setTexture:envMips atIndex:2];
     [ce setTexture:specRaw atIndex:3];
     bindRayResources(ce);
     [ce dispatchThreadgroupsWithIndirectBuffer:tileIndirect indirectBufferOffset:0 threadsPerThreadgroup:tg];
@@ -1363,11 +1439,11 @@ FrameStats WorldRenderer::Impl::drawFrame(const Camera& cameraIn, const WorldFra
     [ce dispatchThreads:MTLSizeMake(static_cast<NSUInteger>(traceW), static_cast<NSUInteger>(traceH), 1) threadsPerThreadgroup:tg];
     [ce endEncoding];
 
-    // Step 2 (cross) -> diffPong, Step 4 (diag) -> diffPing
-    const uint32_t steps[2] = {2u, 4u};
-    id<MTLTexture> inT[2] = {diffPing, diffPong};
-    id<MTLTexture> outT[2] = {diffPong, diffPing};
-    for (int p = 0; p < 2; p++) {
+    // Step 2 (full 3x3 Gaussian) -> diffPong, Step 4 (cross) -> diffPing, Step 8 (diag) -> diffPong
+    const uint32_t steps[3] = {2u, 4u, 8u};
+    id<MTLTexture> inT[3] = {diffPing, diffPong, diffPing};
+    id<MTLTexture> outT[3] = {diffPong, diffPing, diffPong};
+    for (int p = 0; p < 3; p++) {
       WrUniformsGpu upass = u;
       upass.params.y = steps[p] | (static_cast<uint32_t>(p) << 16u);
       id<MTLComputeCommandEncoder> de = [cmd computeCommandEncoder];
@@ -1393,10 +1469,11 @@ FrameStats WorldRenderer::Impl::drawFrame(const Camera& cameraIn, const WorldFra
     [ce setTexture:gPosId[cur] atIndex:0];
     [ce setTexture:gNorm[cur] atIndex:1];
     [ce setTexture:gMat atIndex:2];
-    [ce setTexture:diffPing atIndex:3];
+    [ce setTexture:diffPong atIndex:3];
     [ce setTexture:specPing atIndex:4];
-    [ce setTexture:envTex atIndex:5];
+    [ce setTexture:envMips atIndex:5];
     [ce setTexture:colorTrace atIndex:6];
+    [ce setTexture:diTex[cur] atIndex:7];
     [ce dispatchThreads:MTLSizeMake(static_cast<NSUInteger>(traceW), static_cast<NSUInteger>(traceH), 1) threadsPerThreadgroup:tg];
     [ce endEncoding];
   }
@@ -1522,6 +1599,7 @@ bool WorldRenderer::loadEnvironmentHdr(const std::filesystem::path& hdrPath) {
     [cmd waitUntilCompleted];
     impl_->envTex = tex;
     impl_->hasHdr = true;
+    impl_->rebuildEnvMips(impl_->envSunDir);
     impl_->hasHistory = false;
     impl_->stillFrames = 0;
   }

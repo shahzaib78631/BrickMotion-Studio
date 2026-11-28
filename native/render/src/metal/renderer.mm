@@ -346,10 +346,10 @@ void Renderer::Impl::drawIds() {
 void Renderer::Impl::makeTargets() {
   colorMs = depthMs = accumMs = revealMs = ambientMs = color = accum = reveal = ambient = depth = final = mask = aoRaw = aoSoft = giRaw = giSoft = ssrRaw = ssrSoft = glassFront = glassMat = glassBackNear = glassBackFar = glassDepthTex = glassResolved = nil;
   giHist[0] = giHist[1] = ssrHist[0] = ssrHist[1] = rtDepthHist[0] = rtDepthHist[1] = nil;
-  rtptDepth = rtptMat = rtptMotion = rtptDi = rtptDiffRaw = rtptSpecRaw = rtptDiffPing = rtptSpecPing = rtptDiffPong = nil;
-  rtptGlassTiles = rtptOpaqueTiles = rtptFloorTiles = nil;
+  rtptDepth = rtptMat = rtptMotion = rtptGiQuarter = rtptDiffRaw = rtptSpecRaw = rtptDiffPing = rtptSpecPing = rtptDiffPong = nil;
+  rtptGlassTiles = rtptOpaqueTiles = rtptFloorTiles = rtptSpecTiles = nil;
   for (int i = 0; i < 2; i++) {
-    rtptPosId[i] = rtptNorm[i] = rtptDiffHist[i] = rtptSpecHist[i] = rtptMoments[i] = rtptHLen[i] = rtptTaa[i] = nil;
+    rtptPosId[i] = rtptNorm[i] = rtptDi[i] = rtptDiffHist[i] = rtptSpecHist[i] = rtptMoments[i] = rtptHLen[i] = rtptTaa[i] = nil;
   }
   rtptW = rtptH = rtptTraceW = rtptTraceH = 0;
   rtptHasHistory = false;

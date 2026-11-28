@@ -831,6 +831,7 @@ WorldAsset loadObjAsset(const fs::path& path, std::string* error) {
     const fs::path mtlDir = mtlPath.parent_path();
     std::string line;
     int curIdx = -1;
+    std::vector<float> matKsLum(asset.materials.size(), -1.0f);
     while (std::getline(mf, line)) {
       if (!line.empty() && line.back() == '\r') line.pop_back();
       const char* s = skipWs(line.c_str(), line.c_str() + line.size());
@@ -848,6 +849,7 @@ WorldAsset loadObjAsset(const fs::path& path, std::string* error) {
         mat.name = restStr;
         curIdx = static_cast<int>(asset.materials.size());
         asset.materials.push_back(std::move(mat));
+        matKsLum.push_back(-1.0f);
         matMap[restStr] = curIdx;
       } else if (curIdx >= 0) {
         WorldMaterial& m = asset.materials[curIdx];
@@ -856,6 +858,12 @@ WorldAsset loadObjAsset(const fs::path& path, std::string* error) {
           m.baseColor[0] = srgbToLinear(parseFastFloat(p, e));
           m.baseColor[1] = srgbToLinear(parseFastFloat(p, e));
           m.baseColor[2] = srgbToLinear(parseFastFloat(p, e));
+        } else if (key == "ks") {
+          const char* p = rest;
+          const float sr = parseFastFloat(p, e);
+          const float sg = parseFastFloat(p, e);
+          const float sb = parseFastFloat(p, e);
+          matKsLum[curIdx] = 0.2126f * sr + 0.7152f * sg + 0.0722f * sb;
         } else if (key == "ke") {
           const char* p = rest;
           m.emissive[0] = parseFastFloat(p, e);
@@ -864,7 +872,8 @@ WorldAsset loadObjAsset(const fs::path& path, std::string* error) {
         } else if (key == "ns") {
           const char* p = rest;
           const float ns = std::max(parseFastFloat(p, e), 1.0f);
-          m.roughness = std::clamp(std::sqrt(2.0f / (ns + 2.0f)), 0.06f, 0.92f);
+          // Physical Blinn-Phong exponent -> GGX perceptual roughness: alpha^2 = 2/(Ns+2) => rough = (2/(Ns+2))^0.25!
+          m.roughness = std::clamp(std::pow(2.0f / (ns + 2.0f), 0.25f), 0.14f, 0.94f);
         } else if (key == "pr") {
           const char* p = rest;
           m.roughness = std::clamp(parseFastFloat(p, e), 0.04f, 0.98f);
@@ -923,6 +932,14 @@ WorldAsset loadObjAsset(const fs::path& path, std::string* error) {
 
     // Decode all queued textures in parallel across all CPU cores before material post-processing!
     flushPendingTextures();
+
+    // OBJ exporters (e.g. Maya Bistro) emit default Ns=100 with Ks=0 on matte stone/plaster/foliage.
+    for (size_t i = 0; i < asset.materials.size() && i < matKsLum.size(); i++) {
+      WorldMaterial& m = asset.materials[i];
+      if (m.mrTex < 0 && m.transmission < 0.05f && matKsLum[i] >= 0.0f && matKsLum[i] < 0.03f) {
+        m.roughness = std::max(m.roughness, 0.78f);
+      }
+    }
 
     // Post-process OBJ materials: neutralize gray placeholder Kd when map_Kd exists, detect glass & foliage alpha masks!
     for (WorldMaterial& m : asset.materials) {

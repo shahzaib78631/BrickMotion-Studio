@@ -114,10 +114,10 @@ struct WorldFrameOptions {
   bool studioRig = false;  ///< White studio 4-softbox rig instead of outdoor sun + HDRI/physical sky
   bool floor = false;      ///< Infinite studio shadow-catcher floor under bounds.min.y
   float sunDir[3] = {0.22f, 0.82f, 0.52f};  ///< Unit vector toward the sun (+Y up)
-  float sunIntensity = 6.8f;
-  float sunAngularRadius = 0.022f;  ///< Soft sun disk half-angle (radians)
-  float skyIntensity = 1.65f;
-  float exposure = 1.25f;
+  float sunIntensity = 7.2f;
+  float sunAngularRadius = 0.011f;  ///< Crisp physical solar disk half-angle (radians)
+  float skyIntensity = 2.15f;
+  float exposure = 1.24f;
   float background[3] = {0.96f, 0.96f, 0.96f};
   int maxSamples = 64;
 };

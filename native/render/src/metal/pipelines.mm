@@ -141,7 +141,9 @@ Pipelines makePipelines(Device& device, std::string& error) {
   p.rtptSharcResolve = makeCompute(@"rtptSharcResolve");
   p.rtptDirectPass = makeCompute(@"rtptDirectPass");
   p.rtptTraceFloor = makeCompute(@"rtptTraceFloor");
-  p.rtptTraceOpaque = makeCompute(@"rtptTraceOpaque");
+  p.rtptTraceGiQuarter = makeCompute(@"rtptTraceGiQuarter");
+  p.rtptUpsampleGi = makeCompute(@"rtptUpsampleGi");
+  p.rtptTraceSpec = makeCompute(@"rtptTraceSpec");
   p.rtptTraceGlass = makeCompute(@"rtptTraceGlass");
   p.rtptSvgfTemporal = makeCompute(@"rtptSvgfTemporal");
   p.rtptSvgfAtrous = makeCompute(@"rtptSvgfAtrous");
