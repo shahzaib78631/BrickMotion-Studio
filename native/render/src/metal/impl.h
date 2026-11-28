@@ -256,13 +256,16 @@ struct Renderer::Impl {
   id<MTLTexture> rtptDiffRaw = nil, rtptSpecRaw = nil;
   id<MTLTexture> rtptDiffHist[2] = {nil, nil}, rtptSpecHist[2] = {nil, nil};
   id<MTLTexture> rtptMoments[2] = {nil, nil}, rtptHLen[2] = {nil, nil};
-  id<MTLTexture> rtptDiffPing = nil, rtptSpecPing = nil, rtptDiffPong = nil;
+  id<MTLTexture> rtptDiffPing = nil, rtptSpecPing = nil, rtptDiffPong = nil, rtptSpecPong = nil;
+  id<MTLTexture> rtptVisPing = nil, rtptVisPong = nil;
   id<MTLTexture> rtptTaa[2] = {nil, nil};
   id<MTLBuffer> rtptSharcAccum = nil, rtptSharcResolved = nil;
   id<MTLBuffer> rtptTileIndirect = nil, rtptTileIndirectZero = nil;
   id<MTLBuffer> rtptGlassTiles = nil, rtptOpaqueTiles = nil, rtptFloorTiles = nil, rtptSpecTiles = nil;
   id<MTLBuffer> rtptPoses[3] = {nil, nil, nil};
+  std::vector<uint8_t> rtptPrevVisible;
   uint32_t rtptPoseCapacity = 0;
+  uint32_t rtptPrevPoseCount = 0;
   int rtptPrevPoseSlot = -1;
   bool rtptHasPrevPose = false;
   int rtptW = 0, rtptH = 0;

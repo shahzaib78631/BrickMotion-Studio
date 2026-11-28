@@ -55,7 +55,7 @@ Spread spread(std::vector<double> v) {
 /// framing distance. The first kWarmUp are left out (pipelines and buffers settling). With a
 /// timeline, the build plays as well, one of its frames per frame drawn from `first` on.
 int bench(bmr::Renderer& renderer, const Model& model, int frames, int width, int height, const bmr::FrameOptions& options, const plan::Plan* plan = nullptr,
-          const plan::Timeline* timeline = nullptr, int first = 0) {
+          const plan::Timeline* timeline = nullptr, int first = 0, const std::string& out = {}) {
   constexpr int kWarmUp = 30;
   const double aspect = double(width) / height;
   bmr::OrbitCamera orbit = bmr::OrbitCamera::framing(renderer.scene().bounds, 0.6, aspect);
@@ -83,6 +83,7 @@ int bench(bmr::Renderer& renderer, const Model& model, int frames, int width, in
   std::printf("{\"pieces\":%zu,\"size\":\"%dx%d\",\"triangles\":%llu,\"shadowTriangles\":%llu,\"wholeMapFrames\":%d,\"frames\":%d,\"cpuMs\":%s,\"gpuMs\":%s,\"frameMs\":%s,\"byDetail\":[%u,%u,%u],\"drawCalls\":%u,\"culled\":%u}\n",
               model.pieces().size(), width, height, static_cast<unsigned long long>(last.triangles), static_cast<unsigned long long>(shadowTriangles), wholeMaps, frames, json(spread(cpu)).c_str(), json(spread(gpu)).c_str(), json(spread(total)).c_str(),
               last.byDetail[0], last.byDetail[1], last.byDetail[2], last.drawCalls, last.culled);
+  if (!out.empty()) bmr::writePng(renderer.readback(), out);
   return kOk;
 }
 
@@ -323,7 +324,7 @@ int main(int argc, char** argv) {
     }
     renderer->resize(width, height);
     renderer->select(select);
-    if (benchFrames > 0 && frame < 0) return bench(*renderer, model, benchFrames, width, height, options);
+    if (benchFrames > 0 && frame < 0) return bench(*renderer, model, benchFrames, width, height, options, nullptr, nullptr, 0, out);
     const double aspect = double(width) / height;
     bmr::OrbitCamera orbit;
     if (!bmtools::shotCamera(shot, renderer->scene().bounds, nullptr, orbit)) return usage();
@@ -364,7 +365,7 @@ int main(int argc, char** argv) {
       renderer->setFrame(plan, timeline, frame);
       bmtools::shotCamera(shot, renderer->scene().bounds, &timeline, orbit);
       std::fprintf(stderr, "bmshot: frame %d of %d\n", frame, timeline.frames);
-      if (benchFrames > 0) return bench(*renderer, model, benchFrames, width, height, options, &plan, &timeline, frame);
+      if (benchFrames > 0) return bench(*renderer, model, benchFrames, width, height, options, &plan, &timeline, frame, out);
     }
     bmr::FrameStats s;
     const int draws = options.realtimePathTrace ? std::max(1, rtptFrames) : 1;

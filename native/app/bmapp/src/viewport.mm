@@ -1239,14 +1239,16 @@ std::string Viewport::exportMovie(const MovieSettings& settings, const std::stri
           camera.near = savedCamera->nearClip;
           camera.far = savedCamera->farClip;
         }
-        const bmr::FrameOptions frameOptions = v.withLens(v.options, camera);
+        bmr::FrameOptions frameOptions = v.withLens(v.options, camera);
+        frameOptions.exportOneSpp = v.options.realtimePathTrace;
         auto drawn = v.renderer->draw(camera, frameOptions);
         if (!drawn.submitted) throw std::runtime_error("Metal could not draw a video frame.");
         if ((v.options.pathTraced || v.options.realtimePathTrace) && drawn.pathSamples == 0)
           throw std::runtime_error("Path tracing is not available on this Mac. Choose another shading in View → Look.");
-        // Path traced: the same frame again until it has its samples (stops if it stops gaining).
+        // Live Path Traced (v5 Instant-1SPP): single native-res frame is already converged & ghost-free (8x faster export!).
+        // Offline Path Traced: accumulate full pathMaxSamples per frame.
         const uint32_t targetSamples = v.options.realtimePathTrace
-                                           ? std::min<uint32_t>(8u, static_cast<uint32_t>(std::max(1, v.options.pathMaxSamples)))
+                                           ? 1u
                                            : static_cast<uint32_t>(v.options.pathMaxSamples);
         for (uint32_t before = 0; (v.options.pathTraced || v.options.realtimePathTrace) &&
                                   drawn.pathSamples > before && drawn.pathSamples < targetSamples;) {

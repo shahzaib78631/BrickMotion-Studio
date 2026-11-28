@@ -41,6 +41,7 @@ struct FrameOptions {
   /// Modern Real-Time Path Tracing (ReSTIR DI + SHaRC World-Space Radiance Cache + Dual-Lobe Glossy RT
   /// + Ray-Traced Floor Shadow Catcher + Multi-Bounce Glass + Demodulated SVGF + Halton TAA/Progressive).
   bool realtimePathTrace = false;
+  bool exportOneSpp = false;  ///< native-resolution Instant-1SPP offline movie export mode
   int pathMaxSamples = 64;
   int pathSamplesPerFrame = 2;
   bool cull = true;      ///< leave out what is not in view

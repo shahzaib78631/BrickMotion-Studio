@@ -616,10 +616,11 @@ TEST_CASE("real-time path tracing renders opaque, glass, and floor live across o
   REQUIRE(meanLum > 120.0);
   REQUIRE(meanLum < 252.0);
 
-  // Live orbiting frames keep running (never drop to raster or black) and reset still counter to 1.
+  // Live orbiting frames keep running (never drop to raster or black), reset still counter to 1,
+  // and keep sunlit studio floor completely free of black pepper dots!
   OrbitCamera orbit = OrbitCamera::framing(rig.renderer->scene().bounds, 0.6, 251.0 / 189.0);
   FrameStats sm{};
-  for (int i = 0; i < 4; i++) {
+  for (int i = 0; i < 6; i++) {
     orbit.azimuth += 0.12;
     sm = rig.renderer->draw(orbit.camera(251.0 / 189.0, rig.renderer->scene().bounds), rtpt);
     REQUIRE(sm.submitted);
@@ -630,10 +631,64 @@ TEST_CASE("real-time path tracing renders opaque, glass, and floor live across o
   for (auto [x, y] : {std::pair{2, 2}, {248, 2}}) {
     REQUIRE(moved.at(x, y)[0] > 248);
   }
+  // Bottom studio floor band away from the bricks must have zero dark pepper dots during orbiting.
+  double minFloorLum = 255.0;
+  for (int y = 165; y < 185; y++) {
+    for (int x = 10; x < 70; x++) {
+      minFloorLum = std::min(minFloorLum, luminance(moved.at(x, y)));
+    }
+  }
+  REQUIRE(minFloorLum > 220.0);
 
   // Picking works accurately immediately after an RTPT frame.
   const auto [px, py] = rig.pixel({0, 0, 0});
   rig.renderer->draw(rig.camera, rtpt);
   const uint32_t hit = rig.renderer->pick(px, py);
   REQUIRE(hit != UINT32_MAX);
+}
+
+TEST_CASE("real-time path tracing eliminates phantom floor shadows in one frame when bricks hide or scrub", "[gpu][frame][rtpt]") {
+  NEED_GPU();
+  // Piece 0 sits centered in view casting a dark floor shadow; pieces 1..15 sit off to the side
+  // so hiding piece 0 alone exercises single-brick 3x3 shadow-shock (not bigSceneJump), then hiding all exercises scrub jump.
+  std::string text = piece("3001.dat", 0, 0, 0, 0);
+  for (int i = 0; i < 15; i++) text += piece("3005.dat", 220 + (i % 5) * 24, 0, -140 + (i / 5) * 24, 4);
+  bmtest::GpuRig rig(text, 320, 240);
+  REQUIRE(rig.renderer);
+
+  OrbitCamera view = OrbitCamera::framing(rig.renderer->scene().bounds, 0.6, 320.0 / 240.0);
+  view.target = {0, 0, 0};
+  view.distance = 170;
+  view.elevation = 0.55;
+  view.azimuth = 0.6;
+  const Camera cam = view.camera(320.0 / 240.0, rig.renderer->scene().bounds);
+
+  FrameOptions rtpt;
+  rtpt.realtimePathTrace = true;
+  rtpt.pathMaxSamples = 16;
+
+  // Saturate temporal floor history over 8 frames with piece 0 casting a contact shadow at the center.
+  for (int i = 0; i < 8; i++) REQUIRE(rig.renderer->draw(cam, rtpt).submitted);
+  const Image withBrick = rig.renderer->readback();
+  double centerLumBefore = 0.0;
+  int centerCnt = 0;
+  for (int y = 105; y <= 145; y++) {
+    for (int x = 135; x <= 185; x++) {
+      centerLumBefore += luminance(withBrick.at(x, y));
+      centerCnt++;
+    }
+  }
+  centerLumBefore /= centerCnt;
+  REQUIRE(centerLumBefore < 220.0);  // center has the black brick + dark floor shadow
+
+  // Hide ONLY piece 0 (1 of 16 pieces -> tests 3x3 blue-noise shadow-shock + TAA shock flush on 1 single frame!).
+  rig.renderer->setHidden({0});
+  REQUIRE(rig.renderer->draw(cam, rtpt).submitted);
+  const Image afterOneFrame = rig.renderer->readback();
+  double centerLumAfter1 = 0.0;
+  for (int y = 105; y <= 145; y++)
+    for (int x = 135; x <= 185; x++) centerLumAfter1 += luminance(afterOneFrame.at(x, y));
+  centerLumAfter1 /= centerCnt;
+  // Floor must snap cleanly to white in 1 frame (zero lingering phantom shadow!).
+  REQUIRE(centerLumAfter1 > 246.0);
 }
