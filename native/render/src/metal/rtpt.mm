@@ -406,7 +406,7 @@ FrameStats Renderer::Impl::drawRealtimePathTraced(const Camera& camera, const Fr
   const double cosR = std::sqrt(1.0 - kRigSinSquared);
   ru.rig = simd_make_float4(kWorldStrength, kRigSinSquared, static_cast<float>(cosR), 1.0f);
   ru.background = simd_make_float4(options.background[0], options.background[1], options.background[2], kFloorSkyPower);
-  ru.floorPlane = simd_make_float4(static_cast<float>(floorY), options.floor ? 1.0f : 0.0f, kFloorKeyShare, static_cast<float>(kFloorExtent * diagonal));
+  ru.floorPlane = simd_make_float4(static_cast<float>(floorY), options.floor ? 1.0f : 0.0f, kFloorKeyShare, static_cast<float>(std::max(kFloorExtent, 20.0) * diagonal));
   ru.floorCentre = simd_make_float4(static_cast<float>(middle.x - scene.origin.x), static_cast<float>(middle.z - scene.origin.z), 0.0f, 0.0f);
   const bm::Vec3 sMin = fitted.empty() ? bm::Vec3{-10, -10, -10} : (fitted.min - scene.origin - bm::Vec3{1, 1, 1});
   const bm::Vec3 sMax = fitted.empty() ? bm::Vec3{10, 10, 10} : (fitted.max - scene.origin + bm::Vec3{1, 1, 1});
